@@ -396,10 +396,16 @@ export default function AscariDashboard() {
                 <div><label className="text-slate-400 text-xs uppercase font-bold">Fiyat</label><p className="text-2xl font-bold text-indigo-600">{formatCurrency(selectedProduct.list_price)}</p></div>
                 <div><label className="text-slate-400 text-xs uppercase font-bold">Stok</label><p className="text-lg font-bold text-slate-800">{selectedProduct.qty_available || 0} Adet</p></div>
               </div>
-              {selectedProduct.x_assembled_width && (
+              {(selectedProduct.x_assembled_width || selectedProduct.x_assembled_depth || selectedProduct.x_assembled_height) && (
                 <div className="border-t pt-4">
-                  <label className="text-slate-400 text-xs uppercase font-bold">Kurulu Ölçüler</label>
-                  <p className="text-base font-medium text-slate-700 mt-2">{selectedProduct.x_assembled_width}</p>
+                  <label className="text-slate-400 text-xs uppercase font-bold">Kurulu Ölçüler (G * D * Y)</label>
+                  <p className="text-base font-medium text-slate-700 mt-2">
+                    {[
+                      selectedProduct.x_assembled_width || '-',
+                      selectedProduct.x_assembled_depth || '-',
+                      selectedProduct.x_assembled_height || '-'
+                    ].join(' * ')} cm
+                  </p>
                 </div>
               )}
             </div>

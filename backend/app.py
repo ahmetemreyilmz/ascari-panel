@@ -73,10 +73,14 @@ def data():
 
         # 2. Ürünler (Limit 1000) - Kurulu ölçüler dahil
         prods = models.execute_kw(db, uid, pwd, 'product.product', 'search_read', [[['sale_ok','=',True]]], 
-            {'fields': ['id', 'display_name', 'default_code', 'list_price', 'categ_id', 'image_128', 'x_assembled_width', 'qty_available'], 'limit': 1000})
+            {'fields': ['id', 'display_name', 'default_code', 'list_price', 'categ_id', 'image_128', 
+                        'x_assembled_width', 'x_assembled_depth', 'x_assembled_height', 'qty_available'], 'limit': 1000})
         products = [{'id': p['id'], 'name': p['display_name'], 'default_code': p['default_code'] or '', 
                     'list_price': p['list_price'], 'image_128': p['image_128'], 'categ_path': str(p['categ_id']),
-                    'x_assembled_width': p.get('x_assembled_width', ''), 'qty_available': p.get('qty_available', 0)} for p in prods]
+                    'x_assembled_width': p.get('x_assembled_width', ''), 
+                    'x_assembled_depth': p.get('x_assembled_depth', ''),
+                    'x_assembled_height': p.get('x_assembled_height', ''),
+                    'qty_available': p.get('qty_available', 0)} for p in prods]
 
         # 3. Siparişler (Limit 100) - Teklifler (draft) dahil
         orders = models.execute_kw(db, uid, pwd, 'sale.order', 'search_read', [], 
