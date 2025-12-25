@@ -26,43 +26,55 @@ def static_proxy(path):
 @app.route('/api/connect', methods=['POST'])
 def connect_to_odoo():
     data = request.json
-    url = data.get('url')
-    
-    # URL VALIDATION FIX
-    if url and not url.startswith(('http://', 'https://')):
-        url = 'https://' + url  # Default to https
-    # Remove trailing slash if exists to avoid double slash issues with format
-    if url:
-        url = url.rstrip('/')
+    raw_url = data.get('url', '').strip()
+    db = data.get('db', '').strip()
+    username = data.get('username', '').strip()
+    password = data.get('password', '').strip()
 
-    db = data.get('db')
-    username = data.get('username')
-    password = data.get('password')
+    # 1. URL Temizliği
+    url = raw_url.rstrip('/')
+    # Tarayıcıdan kopyalanan linklerdeki /web, /odoo gibi uzantıları temizle
+    for suffix in ['/web', '/odoo', '#', '/web/login']:
+        if url.endswith(suffix):
+            url = url.split(suffix)[0]
+    
+    # Protokol Ekleme (Yoksa https dene)
+    if not url.startswith(('http://', 'https://')):
+        url = 'https://' + url
 
     try:
-        common = xmlrpc.client.ServerProxy('{}/xmlrpc/2/common'.format(url))
+        # Bağlantı Noktası
+        common_endpoint = '{}/xmlrpc/2/common'.format(url)
+        common = xmlrpc.client.ServerProxy(common_endpoint)
+        
+        # Versiyon Kontrolü (Bağlantı testi için)
+        try:
+            version = common.version()
+        except Exception as e:
+             # Hata varsa belki http'dir?
+             if url.startswith('https://'):
+                 url = url.replace('https://', 'http://')
+                 common_endpoint = '{}/xmlrpc/2/common'.format(url)
+                 common = xmlrpc.client.ServerProxy(common_endpoint)
+                 version = common.version()
+             else:
+                 raise e
+
+        # Kimlik Doğrulama
         uid = common.authenticate(db, username, password, {})
 
         if uid:
-            return jsonify({"status": "success", "uid": uid, "message": "Bağlantı Başarılı!"})
+            return jsonify({"status": "success", "uid": uid, "message": "Bağlantı Başarılı!", "final_url": url})
         else:
-            return jsonify({"status": "error", "message": "Kullanıcı adı veya şifre yanlış"}), 401
+            return jsonify({"status": "error", "message": "Kullanıcı adı veya şifre yanlış."}), 401
 
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": f"Bağlantı Hatası: {str(e)}", "tried_url": url}), 500
 
 @app.route('/api/customers', methods=['POST'])
 def get_customers():
     data = request.json
     url = data.get('url')
-    
-    # URL VALIDATION FIX
-    if url and not url.startswith(('http://', 'https://')):
-        url = 'https://' + url  # Default to https
-    # Remove trailing slash if exists to avoid double slash issues with format
-    if url:
-        url = url.rstrip('/')
-
     db = data.get('db')
     password = data.get('password')
     uid = data.get('uid')
