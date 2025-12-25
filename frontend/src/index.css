@@ -2,31 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer utilities {
-  .scrollbar-hide::-webkit-scrollbar {
-      display: none;
-  }
-  .scrollbar-hide {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
-  }
-}
-
-.animate-fadeIn {
-  animation: fadeIn 0.3s ease-in-out;
-}
-
 body {
   background-color: #f8fafc;
   -webkit-tap-highlight-color: transparent;
 }
 
-/* YAZDIRMA AYARLARI */
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+}
+
+.animate-fadeIn { animation: fadeIn 0.3s ease-in-out; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
 @media print {
   .no-print { display: none !important; }
   .print-only { display: block !important; }
   body { background: white; }
-  #root { margin: 0; padding: 0; }
   @page { margin: 0; size: auto; }
 }
 .print-only { display: none; }
