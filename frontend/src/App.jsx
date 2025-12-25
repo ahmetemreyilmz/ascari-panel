@@ -51,7 +51,6 @@ const MENU_ITEMS = [
   { id: 'quick_offer', name: 'Hızlı Teklif', icon: Zap, roles: ['admin', 'sales'] },
   { id: 'helpdesk', name: 'Teknik Servis', icon: Wrench, roles: ['admin', 'sales'] },
   { id: 'sales', name: 'Satışlar', icon: ShoppingCart, roles: ['admin'] },
-  { id: 'products', name: 'Ürünler', icon: Package, roles: ['admin', 'sales'] },
   { id: 'customers', name: 'Kontaklar', icon: Users, roles: ['admin'] },
   { id: 'accounting', name: 'Muhasebe', icon: DollarSign, roles: ['admin'] },
   { id: 'code', name: 'Entegrasyon', icon: Code, roles: ['admin'] }
@@ -288,7 +287,7 @@ export default function AscariDashboard() {
               <tbody>{quickOfferDetails.items.map((i, k) => <tr key={k} className="border-b"><td className="py-3"><div className="font-bold">{i.name}</div><div className="text-xs text-gray-500">{i.default_code}</div></td><td className="text-right">{i.qty}</td><td className="text-right">{formatCurrency(i.list_price)}</td><td className="text-right font-bold">{formatCurrency(i.list_price * i.qty)}</td></tr>)}</tbody>
             </table>
             <div className="flex justify-end"><div className="w-1/2 text-right"><div className="flex justify-between border-t pt-2 text-xl font-bold"><span>GENEL TOPLAM:</span><span>{formatCurrency(quickOfferDetails.grandTotal)}</span></div></div></div>
-            <div className="mt-10 text-center print-only"><div className="flex justify-center mb-2"><QRCode value={`https://ascari.com.tr:5050/public/quote/${quickOfferDetails.code}`} size={80} /></div><p className="text-xs text-gray-400">{quickOfferDetails.code}</p></div>
+            <div className="mt-10 text-center print-only"><div className="flex justify-center mb-2"><QRCode value={`https://ascari.com.tr/teklif-sorgula?code=${quickOfferDetails.code}`} size={80} /></div><p className="text-xs text-gray-400">Teklifinizi sorgulamak için QR kodu okutun</p><p className="text-xs text-gray-500 font-mono mt-1">{quickOfferDetails.code}</p></div>
           </div>
         </div>
       );
@@ -395,8 +394,14 @@ export default function AscariDashboard() {
               <div><h2 className="text-2xl font-bold text-slate-900">{selectedProduct.name}</h2><p className="text-slate-500 font-mono mt-1">{selectedProduct.default_code}</p></div>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div><label className="text-slate-400 text-xs uppercase font-bold">Fiyat</label><p className="text-2xl font-bold text-indigo-600">{formatCurrency(selectedProduct.list_price)}</p></div>
-                <div><label className="text-slate-400 text-xs uppercase font-bold">Stok</label><p className="text-lg font-bold text-slate-800">{selectedProduct.qty_available} Adet</p></div>
+                <div><label className="text-slate-400 text-xs uppercase font-bold">Stok</label><p className="text-lg font-bold text-slate-800">{selectedProduct.qty_available || 0} Adet</p></div>
               </div>
+              {selectedProduct.x_assembled_width && (
+                <div className="border-t pt-4">
+                  <label className="text-slate-400 text-xs uppercase font-bold">Kurulu Ölçüler</label>
+                  <p className="text-base font-medium text-slate-700 mt-2">{selectedProduct.x_assembled_width}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -478,7 +483,6 @@ export default function AscariDashboard() {
           {loadingData && <div className="absolute top-0 left-0 right-0 h-1 bg-indigo-200 overflow-hidden z-50"><div className="h-full bg-indigo-600 animate-progress"></div></div>}
           {activeTab === 'dashboard' && <div className="text-center py-20 text-slate-400">Dashboard Raporları</div>}
           {activeTab === 'quick_offer' && renderProductGrid(true)}
-          {activeTab === 'products' && renderProductGrid(false)}
           {activeTab === 'sales' && renderSales()}
           {activeTab === 'helpdesk' && renderHelpdesk()}
           {activeTab === 'customers' && renderCustomers()}

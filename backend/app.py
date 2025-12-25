@@ -54,17 +54,37 @@ def data():
         models = xmlrpc.client.ServerProxy(f'{url}/xmlrpc/2/object')
         db, pwd = d.get('db'), d.get('password')
 
-        # 1. Kategoriler (Tümünü Çek)
-        cats = models.execute_kw(db, uid, pwd, 'product.category', 'search_read', [], {'fields': ['id', 'name', 'parent_id']})
+        # 1. Kategoriler (Sadece Ticari Mal ve Alt Kategorileri)
+        # Önce "Ticari Mal" kategorisini bul
+        commercial_cats = models.execute_kw(db, uid, pwd, 'product.category', 'search_read', 
+            [[['name', 'ilike', 'Ticari Mal']]], {'fields': ['id', 'name'], 'limit': 1})
+        
+        if commercial_cats:
+            commercial_id = commercial_cats[0]['id']
+            # Ticari Mal ve alt kategorilerini getir
+            cats = models.execute_kw(db, uid, pwd, 'product.category', 'search_read', 
+                [['|', ['id', '=', commercial_id], ['parent_id', 'child_of', commercial_id]]], 
+                {'fields': ['id', 'name', 'parent_id']})
+        else:
+            # Ticari Mal bulunamazsa tüm kategorileri getir
+            cats = models.execute_kw(db, uid, pwd, 'product.category', 'search_read', [], {'fields': ['id', 'name', 'parent_id']})
+        
         categories = build_tree(cats)
 
-        # 2. Ürünler (Limit 1000)
-        prods = models.execute_kw(db, uid, pwd, 'product.product', 'search_read', [[['sale_ok','=',True]]], {'fields': ['id', 'display_name', 'default_code', 'list_price', 'categ_id', 'image_128'], 'limit': 1000})
-        products = [{'id': p['id'], 'name': p['display_name'], 'default_code': p['default_code'] or '', 'list_price': p['list_price'], 'image_128': p['image_128'], 'categ_path': str(p['categ_id'])} for p in prods]
+        # 2. Ürünler (Limit 1000) - Kurulu ölçüler dahil
+        prods = models.execute_kw(db, uid, pwd, 'product.product', 'search_read', [[['sale_ok','=',True]]], 
+            {'fields': ['id', 'display_name', 'default_code', 'list_price', 'categ_id', 'image_128', 'x_assembled_width', 'qty_available'], 'limit': 1000})
+        products = [{'id': p['id'], 'name': p['display_name'], 'default_code': p['default_code'] or '', 
+                    'list_price': p['list_price'], 'image_128': p['image_128'], 'categ_path': str(p['categ_id']),
+                    'x_assembled_width': p.get('x_assembled_width', ''), 'qty_available': p.get('qty_available', 0)} for p in prods]
 
-        # 3. Siparişler (Limit 100)
-        orders = models.execute_kw(db, uid, pwd, 'sale.order', 'search_read', [], {'fields': ['id', 'name', 'partner_id', 'date_order', 'amount_total', 'state'], 'limit': 100, 'order': 'date_order desc'})
-        clean_orders = [{'id_raw': o['id'], 'name': o['name'], 'customer': o['partner_id'][1], 'date': o['date_order'], 'amount': o['amount_total'], 'status': o['state']} for o in orders]
+        # 3. Siparişler (Limit 100) - Teklifler (draft) dahil
+        orders = models.execute_kw(db, uid, pwd, 'sale.order', 'search_read', [], 
+            {'fields': ['id', 'name', 'partner_id', 'date_order', 'amount_total', 'state', 'client_order_ref'], 
+             'limit': 100, 'order': 'date_order desc'})
+        clean_orders = [{'id_raw': o['id'], 'name': o['name'], 'customer': o['partner_id'][1], 
+                        'date': o['date_order'], 'amount': o['amount_total'], 'status': o['state'],
+                        'quote_code': o.get('client_order_ref', '')} for o in orders]
 
         # 4. Kontaklar (Güvenli Çekim - Try/Except)
         customers = []
@@ -156,30 +176,59 @@ def create_quote():
         
         # Önce partner oluştur veya bul (eğer telefon varsa)
         partner_id = False
+        partner_tag = None
+        
+        # "Mağaza Ziyaretçisi Panel" etiketini bul veya oluştur
+        try:
+            tag_search = models.execute_kw(db, uid, pwd, 'res.partner.category', 'search_read',
+                [[['name', '=', 'Mağaza Ziyaretçisi Panel']]], {'fields': ['id'], 'limit': 1})
+            if tag_search:
+                partner_tag = tag_search[0]['id']
+            else:
+                partner_tag = models.execute_kw(db, uid, pwd, 'res.partner.category', 'create', [{
+                    'name': 'Mağaza Ziyaretçisi Panel'
+                }])
+        except:
+            partner_tag = None  # Etiket oluşturulamazsa devam et
+        
         if customer_phone:
             # Telefon ile mevcut partner ara
             partners = models.execute_kw(db, uid, pwd, 'res.partner', 'search_read', 
                 [[['phone', '=', customer_phone]]], {'fields': ['id'], 'limit': 1})
             if partners:
                 partner_id = partners[0]['id']
+                # Mevcut müşteriye de etiketi ekle
+                if partner_tag:
+                    try:
+                        models.execute_kw(db, uid, pwd, 'res.partner', 'write', [[partner_id], {
+                            'category_id': [(4, partner_tag)]  # Many2many add
+                        }])
+                    except:
+                        pass
             else:
                 # Yeni partner oluştur
-                partner_id = models.execute_kw(db, uid, pwd, 'res.partner', 'create', [{
+                partner_data = {
                     'name': customer_name,
                     'phone': customer_phone,
                     'customer_rank': 1
-                }])
+                }
+                if partner_tag:
+                    partner_data['category_id'] = [(4, partner_tag)]
+                partner_id = models.execute_kw(db, uid, pwd, 'res.partner', 'create', [partner_data])
         else:
-            # Genel "Web Müşterisi" partner'ı kullan veya oluştur
+            # Genel "Mağaza Ziyaretçisi" partner'ı kullan veya oluştur
             partners = models.execute_kw(db, uid, pwd, 'res.partner', 'search_read',
-                [[['name', '=', 'Web Müşterisi']]], {'fields': ['id'], 'limit': 1})
+                [[['name', '=', 'Mağaza Ziyaretçisi']]], {'fields': ['id'], 'limit': 1})
             if partners:
                 partner_id = partners[0]['id']
             else:
-                partner_id = models.execute_kw(db, uid, pwd, 'res.partner', 'create', [{
-                    'name': 'Web Müşterisi',
+                partner_data = {
+                    'name': 'Mağaza Ziyaretçisi',
                     'customer_rank': 1
-                }])
+                }
+                if partner_tag:
+                    partner_data['category_id'] = [(4, partner_tag)]
+                partner_id = models.execute_kw(db, uid, pwd, 'res.partner', 'create', [partner_data])
         
         # Satış siparişi oluştur
         order_lines = []
@@ -244,4 +293,175 @@ def get_quote(quote_code):
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)})
 
+# ========== CRM API'leri ==========
+
+@app.route('/api/customer-details/<int:partner_id>', methods=['POST'])
+def customer_details(partner_id):
+    """Müşteri detaylarını getirir: siparişler, faturalar, teklifler, servis kayıtları"""
+    d = request.json
+    try:
+        url, uid, _ = get_conn(d)
+        models = xmlrpc.client.ServerProxy(f'{url}/xmlrpc/2/object'})
+        db, pwd = d.get('db'), d.get('password')
+        
+        # Sipariş ve Teklifler
+        orders = models.execute_kw(db, uid, pwd, 'sale.order', 'search_read',
+            [[['partner_id', '=', partner_id]]], 
+            {'fields': ['id', 'name', 'date_order', 'amount_total', 'state', 'client_order_ref'], 
+             'order': 'date_order desc', 'limit': 50})
+        
+        # Faturalar
+        invoices = []
+        try:
+            inv_raw = models.execute_kw(db, uid, pwd, 'account.move', 'search_read',
+                [[['partner_id', '=', partner_id], ['move_type', 'in', ['out_invoice', 'in_invoice']]]],
+                {'fields': ['name', 'invoice_date', 'amount_total', 'state', 'payment_state', 'move_type'],
+                 'order': 'invoice_date desc', 'limit': 50})
+            invoices = inv_raw
+        except:
+            pass
+        
+        # Teknik Servis
+        tickets = []
+        try:
+            ticket_raw = models.execute_kw(db, uid, pwd, 'helpdesk.ticket', 'search_read',
+                [[['partner_id', '=', partner_id]]],
+                {'fields': ['id', 'name', 'stage_id', 'description', 'create_date'],
+                 'order': 'create_date desc', 'limit': 50})
+            tickets = ticket_raw
+        except:
+            pass
+        
+        # Ödemeler
+        payments = []
+        try:
+            payment_raw = models.execute_kw(db, uid, pwd, 'account.payment', 'search_read',
+                [[['partner_id', '=', partner_id]]],
+                {'fields': ['id', 'name', 'amount', 'date', 'state', 'payment_type'],
+                 'order': 'date desc', 'limit': 50})
+            payments = payment_raw
+        except:
+            pass
+        
+        return jsonify({
+            'status': 'success',
+            'orders': orders,
+            'invoices': invoices,
+            'tickets': tickets,
+            'payments': payments
+        })
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)})
+
+@app.route('/api/register-payment', methods=['POST'])
+def register_payment():
+    """Tahsilat veya ödeme kaydeder"""
+    d = request.json
+    try:
+        url, uid, _ = get_conn(d)
+        models = xmlrpc.client.ServerProxy(f'{url}/xmlrpc/2/object'})
+        db, pwd = d.get('db'), d.get('password')
+        
+        partner_id = d.get('partner_id')
+        amount = d.get('amount', 0)
+        payment_type = d.get('payment_type', 'inbound')  # inbound=tahsilat, outbound=ödeme
+        memo = d.get('memo', '')
+        
+        # Ödeme kaydı oluştur
+        payment_data = {
+            'partner_id': partner_id,
+            'amount': amount,
+            'payment_type': payment_type,
+            'partner_type': 'customer',
+            'ref': memo or 'Mağaza Panel Ödeme'
+        }
+        
+        payment_id = models.execute_kw(db, uid, pwd, 'account.payment', 'create', [payment_data])
+        
+        # Ödemeyi onayla (post)
+        try:
+            models.execute_kw(db, uid, pwd, 'account.payment', 'action_post', [[payment_id]])
+        except:
+            pass  # Odoo v19'da farklı method olabilir
+        
+        return jsonify({
+            'status': 'success',
+            'payment_id': payment_id,
+            'message': 'Ödeme kaydedildi'
+        })
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)})
+
+# ========== Helpdesk API'leri ==========
+
+@app.route('/api/helpdesk-stats', methods=['POST'])
+def helpdesk_stats():
+    """Helpdesk özet istatistikleri"""
+    d = request.json
+    try:
+        url, uid, _ = get_conn(d)
+        models = xmlrpc.client.ServerProxy(f'{url}/xmlrpc/2/object'})
+        db, pwd = d.get('db'), d.get('password')
+        
+        # Tüm ticketları çek
+        all_tickets = models.execute_kw(db, uid, pwd, 'helpdesk.ticket', 'search_read',
+            [[]], {'fields': ['id', 'stage_id', 'priority']})
+        
+        # Stage'lere göre say
+        open_count = len([t for t in all_tickets if t.get('stage_id') and 'Done' not in str(t['stage_id'])])
+        closed_count = len([t for t in all_tickets if t.get('stage_id') and 'Done' in str(t['stage_id'])])
+        urgent_count = len([t for t in all_tickets if t.get('priority') == '3'])  # Priority 3 = Urgent
+        
+        return jsonify({
+            'status': 'success',
+            'total_open': open_count,
+            'total_closed': closed_count,
+            'total_urgent': urgent_count,
+            'total': len(all_tickets)
+        })
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)})
+
+@app.route('/api/ticket-update', methods=['POST'])
+def ticket_update():
+    """Ticket durumunu günceller veya not ekler"""
+    d = request.json
+    try:
+        url, uid, _ = get_conn(d)
+        models = xmlrpc.client.ServerProxy(f'{url}/xmlrpc/2/object'})
+        db, pwd = d.get('db'), d.get('password')
+        
+        ticket_id = d.get('ticket_id')
+        stage_id = d.get('stage_id')  # Yeni stage ID
+        note = d.get('note', '')
+        
+        update_data = {}
+        if stage_id:
+            update_data['stage_id'] = stage_id
+        
+        if update_data:
+            models.execute_kw(db, uid, pwd, 'helpdesk.ticket', 'write', [[ticket_id], update_data])
+        
+        # Not ekle (message_post)
+        if note:
+            try:
+                models.execute_kw(db, uid, pwd, 'helpdesk.ticket', 'message_post', [[ticket_id]], {
+                    'body': note,
+                    'message_type': 'comment'
+                })
+            except:
+                pass
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Ticket güncellendi'
+        })
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)})
+
 if __name__ == '__main__': app.run(host='0.0.0.0', port=5000)
+
