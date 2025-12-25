@@ -3,93 +3,81 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import xmlrpc.client
 
-# React build dosyalarının nerede olduğunu belirtiyoruz (Docker içinde 'client' klasörü olacak)
 app = Flask(__name__, static_folder='../frontend/dist', static_url_path='/')
 CORS(app)
 
-# --- ANA SAYFA (React Uygulamasını Sunar) ---
 @app.route('/')
 def index():
     return send_from_directory(app.static_folder, 'index.html')
 
-# React Router desteği için diğer yolları da index.html'e yönlendir
 @app.route('/<path:path>')
 def static_proxy(path):
-    # Eğer dosya varsa onu gönder (css, js, png vb.)
     if os.path.exists(os.path.join(app.static_folder, path)):
         return send_from_directory(app.static_folder, path)
-    # Yoksa React uygulamasını gönder (Router halleder)
     return send_from_directory(app.static_folder, 'index.html')
 
-# --- API ENDPOINTLERİ (Odoo ile Konuşan Kısım) ---
+def get_odoo_connection(url, db, username, password):
+    # URL Düzeltme
+    url = url.strip().rstrip('/')
+    for suffix in ['/web', '/odoo', '#', '/web/login']:
+        if url.endswith(suffix): url = url.split(suffix)[0]
+    if not url.startswith(('http://', 'https://')): url = 'https://' + url
+    
+    common = xmlrpc.client.ServerProxy('{}/xmlrpc/2/common'.format(url))
+    uid = common.authenticate(db, username, password, {})
+    return url, uid, common
 
 @app.route('/api/connect', methods=['POST'])
 def connect_to_odoo():
     data = request.json
-    raw_url = data.get('url', '').strip()
-    db = data.get('db', '').strip()
-    username = data.get('username', '').strip()
-    password = data.get('password', '').strip()
-
-    # 1. URL Temizliği
-    url = raw_url.rstrip('/')
-    # Tarayıcıdan kopyalanan linklerdeki /web, /odoo gibi uzantıları temizle
-    for suffix in ['/web', '/odoo', '#', '/web/login']:
-        if url.endswith(suffix):
-            url = url.split(suffix)[0]
-    
-    # Protokol Ekleme (Yoksa https dene)
-    if not url.startswith(('http://', 'https://')):
-        url = 'https://' + url
-
     try:
-        # Bağlantı Noktası
-        common_endpoint = '{}/xmlrpc/2/common'.format(url)
-        common = xmlrpc.client.ServerProxy(common_endpoint)
-        
-        # Versiyon Kontrolü (Bağlantı testi için)
-        try:
-            version = common.version()
-        except Exception as e:
-             # Hata varsa belki http'dir?
-             if url.startswith('https://'):
-                 url = url.replace('https://', 'http://')
-                 common_endpoint = '{}/xmlrpc/2/common'.format(url)
-                 common = xmlrpc.client.ServerProxy(common_endpoint)
-                 version = common.version()
-             else:
-                 raise e
-
-        # Kimlik Doğrulama
-        uid = common.authenticate(db, username, password, {})
-
+        url, uid, _ = get_odoo_connection(data.get('url'), data.get('db'), data.get('username'), data.get('password'))
         if uid:
-            return jsonify({"status": "success", "uid": uid, "message": "Bağlantı Başarılı!", "final_url": url})
+            return jsonify({"status": "success", "uid": uid, "message": "Bağlantı Başarılı!"})
         else:
             return jsonify({"status": "error", "message": "Kullanıcı adı veya şifre yanlış."}), 401
-
     except Exception as e:
-        return jsonify({"status": "error", "message": f"Bağlantı Hatası: {str(e)}", "tried_url": url}), 500
+        return jsonify({"status": "error", "message": f"Bağlantı Hatası: {str(e)}"}), 500
 
-@app.route('/api/customers', methods=['POST'])
-def get_customers():
+@app.route('/api/dashboard-data', methods=['POST'])
+def get_dashboard_data():
     data = request.json
-    url = data.get('url')
-    db = data.get('db')
-    password = data.get('password')
-    uid = data.get('uid')
-
     try:
+        url, uid, _ = get_odoo_connection(data.get('url'), data.get('db'), data.get('username'), data.get('password'))
         models = xmlrpc.client.ServerProxy('{}/xmlrpc/2/object'.format(url))
-        customers = models.execute_kw(db, uid, password,
-            'res.partner', 'search_read',
-            [[['customer_rank', '>', 0]]],
-            {'fields': ['name', 'email', 'phone', 'street', 'total_due'], 'limit': 10}
-        )
-        return jsonify(customers)
+        password = data.get('password')
+        db = data.get('db')
+
+        # 1. Müşteriler (Customers)
+        customers_raw = models.execute_kw(db, uid, password, 'res.partner', 'search_read', [[['customer_rank', '>', 0]]], {'fields': ['id', 'name', 'email', 'phone', 'street', 'total_due'], 'limit': 20})
+        customers = [{'id': c['id'], 'name': c['name'], 'email': c['email'] or '-', 'phone': c['phone'] or '-', 'address': c['street'] or '-', 'balance': c['total_due'] or 0, 'type': 'company' if c.get('is_company') else 'individual'} for c in customers_raw]
+
+        # 2. Siparişler (Orders)
+        orders_raw = models.execute_kw(db, uid, password, 'sale.order', 'search_read', [], {'fields': ['id', 'name', 'partner_id', 'date_order', 'amount_total', 'state'], 'limit': 20, 'order': 'date_order desc'})
+        orders = [{'id': o['name'], 'customer': o['partner_id'][1], 'date': o['date_order'], 'amount': o['amount_total'], 'status': o['state'], 'label': o['state']} for o in orders_raw]
+
+        # 3. Ürünler (Products)
+        products_raw = models.execute_kw(db, uid, password, 'product.product', 'search_read', [[['sale_ok', '=', True]]], {'fields': ['id', 'name', 'default_code', 'list_price', 'standard_price', 'qty_available', 'categ_id'], 'limit': 50})
+        products = [{'id': p['id'], 'name': p['name'], 'default_code': p['default_code'] or '', 'list_price': p['list_price'], 'cost_price': p['standard_price'], 'qty_available': p['qty_available'], 'category': p['categ_id'][1] if p['categ_id'] else 'Diğer'} for p in products_raw]
+
+        # 4. Faturalar (Invoices)
+        invoices_raw = models.execute_kw(db, uid, password, 'account.move', 'search_read', [[['move_type', 'in', ['out_invoice', 'in_invoice']]]], {'fields': ['name', 'partner_id', 'invoice_date', 'amount_total', 'state', 'payment_state', 'move_type'], 'limit': 20})
+        invoices = [{'id': i['name'], 'partner': i['partner_id'][1], 'date': i['invoice_date'], 'amount': i['amount_total'], 'status': i['state'], 'payment_state': i['payment_state'], 'type': i['move_type']} for i in invoices_raw]
+
+        # 5. İstatistikler (Basit Toplamlar)
+        total_revenue = sum(o['amount'] for o in orders if o['status'] in ['sale', 'done'])
+        
+        return jsonify({
+            'customers': customers,
+            'orders': orders,
+            'products': products,
+            'invoices': invoices,
+            'tickets': [], # Helpdesk modülü varsa buraya eklenebilir
+            'salesStats': { 'totalRevenue': total_revenue, 'confirmedOrders': len(orders), 'activeQuotations': 0, 'dailyStoreRevenue': 0, 'newCustomers': 0, 'personalQuotes': 0 }
+        })
     except Exception as e:
+        print(f"Veri çekme hatası: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    # Sunucuda dışarıya açmak için host 0.0.0.0 olmalı
     app.run(host='0.0.0.0', port=5000)
