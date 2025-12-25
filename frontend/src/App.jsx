@@ -447,7 +447,12 @@ export default function AscariDashboard() {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-100">
-          <div className="text-center mb-8"><div className="inline-block p-3 bg-slate-900 rounded-xl mb-3"><img src="Ascari Beyaz Logo.png" className="h-8 invert brightness-0 filter" onError={(e) => e.target.style.display = 'none'} /></div><h2 className="text-2xl font-bold text-slate-800">Yönetim Paneli</h2></div>
+          <div className="text-center mb-8">
+            <div className="inline-block p-3 bg-slate-900 rounded-xl mb-3">
+              <img src="/logo.png" className="h-12 brightness-200 filter" onError={(e) => e.target.style.display = 'none'} alt="Ascari Logo" />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-800">Yönetim Paneli</h2>
+          </div>
           {loginError && <div className="bg-red-50 text-red-600 p-3 rounded mb-4 text-sm border-l-4 border-red-500">{loginError}</div>}
           <form onSubmit={handleConnect} className="space-y-4">
             <input className="w-full p-4 border rounded-xl bg-slate-50" placeholder="Odoo Adresi" value={credentials.url} onChange={e => setCredentials({ ...credentials, url: e.target.value })} />
@@ -466,7 +471,13 @@ export default function AscariDashboard() {
     <div className="flex h-screen bg-slate-50 font-sans">
       {renderProductModal()}
       <div className="w-20 lg:w-64 bg-slate-900 text-white flex flex-col transition-all duration-300 no-print">
-        <div className="p-6 font-bold text-2xl hidden lg:block tracking-widest">ASCARI</div>
+        <div className="p-6 font-bold text-2xl hidden lg:flex items-center gap-3">
+          <img src="/logo.png" className="h-8 brightness-200" onError={(e) => e.target.style.display = 'none'} alt="Ascari" />
+          <span className="tracking-widest">ASCARI</span>
+        </div>
+        <div className="lg:hidden p-4 flex justify-center">
+          <img src="/logo.png" className="h-8 brightness-200" onError={(e) => e.target.style.display = 'none'} alt="Ascari" />
+        </div>
         <nav className="flex-1 space-y-1 px-2 py-4">
           {MENU_ITEMS.map(item => (
             (item.roles.includes(userRole)) && (
