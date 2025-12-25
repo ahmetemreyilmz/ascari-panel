@@ -17,7 +17,6 @@ def static_proxy(path):
     return send_from_directory(app.static_folder, 'index.html')
 
 def get_odoo_connection(url, db, username, password):
-    # URL Düzeltme
     url = url.strip().rstrip('/')
     for suffix in ['/web', '/odoo', '#', '/web/login']:
         if url.endswith(suffix): url = url.split(suffix)[0]
@@ -57,14 +56,24 @@ def get_dashboard_data():
         orders = [{'id': o['name'], 'customer': o['partner_id'][1], 'date': o['date_order'], 'amount': o['amount_total'], 'status': o['state'], 'label': o['state']} for o in orders_raw]
 
         # 3. Ürünler (Products)
-        products_raw = models.execute_kw(db, uid, password, 'product.product', 'search_read', [[['sale_ok', '=', True]]], {'fields': ['id', 'name', 'default_code', 'list_price', 'standard_price', 'qty_available', 'categ_id'], 'limit': 50})
-        products = [{'id': p['id'], 'name': p['name'], 'default_code': p['default_code'] or '', 'list_price': p['list_price'], 'cost_price': p['standard_price'], 'qty_available': p['qty_available'], 'category': p['categ_id'][1] if p['categ_id'] else 'Diğer'} for p in products_raw]
+        products_raw = models.execute_kw(db, uid, password, 'product.product', 'search_read', [[['sale_ok', '=', True]]], {'fields': ['id', 'display_name', 'default_code', 'list_price', 'standard_price', 'qty_available', 'categ_id', 'image_128'], 'limit': 50})
+        products = [{'id': p['id'], 'name': p['display_name'], 'default_code': p['default_code'] or '', 'list_price': p['list_price'], 'cost_price': p['standard_price'], 'qty_available': p['qty_available'], 'category': p['categ_id'][1] if p['categ_id'] else 'Diğer', 'image_128': p['image_128']} for p in products_raw]
 
         # 4. Faturalar (Invoices)
-        invoices_raw = models.execute_kw(db, uid, password, 'account.move', 'search_read', [[['move_type', 'in', ['out_invoice', 'in_invoice']]]], {'fields': ['name', 'partner_id', 'invoice_date', 'amount_total', 'state', 'payment_state', 'move_type'], 'limit': 20})
-        invoices = [{'id': i['name'], 'partner': i['partner_id'][1], 'date': i['invoice_date'], 'amount': i['amount_total'], 'status': i['state'], 'payment_state': i['payment_state'], 'type': i['move_type']} for i in invoices_raw]
+        try:
+            invoices_raw = models.execute_kw(db, uid, password, 'account.move', 'search_read', [[['move_type', 'in', ['out_invoice', 'in_invoice']]]], {'fields': ['name', 'partner_id', 'invoice_date', 'amount_total', 'state', 'payment_state', 'move_type'], 'limit': 20})
+            invoices = [{'id': i['name'], 'partner': i['partner_id'][1], 'date': i['invoice_date'], 'amount': i['amount_total'], 'status': i['state'], 'payment_state': i['payment_state'], 'type': i['move_type']} for i in invoices_raw]
+        except:
+            invoices = []
 
-        # 5. İstatistikler (Basit Toplamlar)
+        # 5. Helpdesk (Tickets)
+        try:
+            tickets_raw = models.execute_kw(db, uid, password, 'helpdesk.ticket', 'search_read', [], {'fields': ['id', 'name', 'partner_id', 'priority', 'stage_id', 'description'], 'limit': 20})
+            tickets = [{'id': str(t['id']), 'product': t['name'], 'customer': t['partner_id'][1] if t['partner_id'] else 'Bilinmiyor', 'issue': t['description'] or '-', 'status': 'new', 'priority': t['priority']} for t in tickets_raw]
+        except:
+            tickets = []
+
+        # 5. İstatistikler
         total_revenue = sum(o['amount'] for o in orders if o['status'] in ['sale', 'done'])
         
         return jsonify({
@@ -72,7 +81,7 @@ def get_dashboard_data():
             'orders': orders,
             'products': products,
             'invoices': invoices,
-            'tickets': [], # Helpdesk modülü varsa buraya eklenebilir
+            'tickets': tickets,
             'salesStats': { 'totalRevenue': total_revenue, 'confirmedOrders': len(orders), 'activeQuotations': 0, 'dailyStoreRevenue': 0, 'newCustomers': 0, 'personalQuotes': 0 }
         })
     except Exception as e:
