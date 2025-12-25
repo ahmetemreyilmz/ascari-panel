@@ -27,6 +27,14 @@ def static_proxy(path):
 def connect_to_odoo():
     data = request.json
     url = data.get('url')
+    
+    # URL VALIDATION FIX
+    if url and not url.startswith(('http://', 'https://')):
+        url = 'https://' + url  # Default to https
+    # Remove trailing slash if exists to avoid double slash issues with format
+    if url:
+        url = url.rstrip('/')
+
     db = data.get('db')
     username = data.get('username')
     password = data.get('password')
@@ -47,6 +55,14 @@ def connect_to_odoo():
 def get_customers():
     data = request.json
     url = data.get('url')
+    
+    # URL VALIDATION FIX
+    if url and not url.startswith(('http://', 'https://')):
+        url = 'https://' + url  # Default to https
+    # Remove trailing slash if exists to avoid double slash issues with format
+    if url:
+        url = url.rstrip('/')
+
     db = data.get('db')
     password = data.get('password')
     uid = data.get('uid')
