@@ -23,17 +23,10 @@ def get_conn(data):
     return url, uid, common
 
 def build_tree(cats):
-    # Sadece Ticari (Saleable) kök kategorileri al veya tümünü alıp filtrele
-    tree = []
-    lookup = {}
+    tree, lookup = [], {}
+    for c in cats: c['children'] = []; lookup[c['id']] = c
     for c in cats:
-        c['children'] = []
-        lookup[c['id']] = c
-    for c in cats:
-        if c['parent_id']:
-            pid = c['parent_id'][0]
-            if pid in lookup: lookup[pid]['children'].append(c)
-            else: tree.append(c)
+        if c['parent_id'] and c['parent_id'][0] in lookup: lookup[c['parent_id'][0]]['children'].append(c)
         else: tree.append(c)
     return tree
 
@@ -52,7 +45,7 @@ def data():
         models = xmlrpc.client.ServerProxy(f'{url}/xmlrpc/2/object')
         db, pwd = d.get('db'), d.get('password')
 
-        # 1. Kategoriler (Sadece ürün içerenler veya hepsi)
+        # 1. Kategoriler (Tümünü Çek)
         cats = models.execute_kw(db, uid, pwd, 'product.category', 'search_read', [], {'fields': ['id', 'name', 'parent_id']})
         categories = build_tree(cats)
 
@@ -64,7 +57,7 @@ def data():
         orders = models.execute_kw(db, uid, pwd, 'sale.order', 'search_read', [], {'fields': ['id', 'name', 'partner_id', 'date_order', 'amount_total', 'state'], 'limit': 100, 'order': 'date_order desc'})
         clean_orders = [{'id_raw': o['id'], 'name': o['name'], 'customer': o['partner_id'][1], 'date': o['date_order'], 'amount': o['amount_total'], 'status': o['state']} for o in orders]
 
-        # 4. Helpdesk (Hata Vermesin)
+        # 4. Helpdesk (Hata Kontrollü)
         tickets = []
         try:
             raw_t = models.execute_kw(db, uid, pwd, 'helpdesk.ticket', 'search_read', [], {'fields': ['id', 'name', 'partner_id', 'stage_id', 'description'], 'limit': 50})
@@ -91,6 +84,9 @@ def search():
         elif model == 'sale.order':
              domain = ['|', ('name', 'ilike', query), ('partner_id', 'ilike', query)]
              fields = ['id', 'name', 'partner_id', 'date_order', 'amount_total', 'state']
+        elif model == 'res.partner':
+             domain = ['|', ('name', 'ilike', query), ('phone', 'ilike', query)]
+             fields = ['id', 'name', 'phone', 'email', 'total_due']
              
         res = models.execute_kw(d.get('db'), uid, d.get('password'), model, 'search_read', [domain], {'fields': fields, 'limit': 100})
         
@@ -100,6 +96,8 @@ def search():
             data = [{'id': p['id'], 'name': p['display_name'], 'default_code': p['default_code'], 'list_price': p['list_price'], 'image_128': p['image_128'], 'categ_path': str(p['categ_id'])} for p in res]
         elif model == 'sale.order':
             data = [{'id_raw': o['id'], 'name': o['name'], 'customer': o['partner_id'][1], 'date': o['date_order'], 'amount': o['amount_total'], 'status': o['state']} for o in res]
+        elif model == 'res.partner':
+            data = [{'id': p['id'], 'name': p['name'], 'phone': p['phone'], 'email': p['email'], 'balance': p['total_due']} for p in res]
 
         return jsonify({"status": "success", "data": data})
     except Exception as e: return jsonify({"status": "error", "message": str(e)})
