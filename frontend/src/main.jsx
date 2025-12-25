@@ -8,7 +8,9 @@ class ErrorBoundary extends React.Component {
   static getDerivedStateFromError(error) { return { hasError: true }; }
   componentDidCatch(error, errorInfo) { this.setState({ error }); console.error(error, errorInfo); }
   render() {
-    if (this.state.hasError) return <div className="p-10 text-red-600 font-bold">Hata: {this.state.error?.toString()}</div>;
+    if (this.state.hasError) {
+      return <div className="p-10 text-red-600 font-bold">Hata: {this.state.error?.toString()}</div>;
+    }
     return this.props.children; 
   }
 }

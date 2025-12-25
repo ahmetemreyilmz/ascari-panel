@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
+} from 'recharts';
+import { 
   LayoutDashboard, ShoppingCart, Users, DollarSign, Settings, 
   LogOut, RefreshCw, ChevronRight, TrendingUp, Package, FileText, Code,
   ArrowLeft, Printer, Download, CheckCircle, Clock, AlertCircle,
@@ -23,9 +26,7 @@ const INITIAL_DATA = {
 
 const formatCurrency = (value) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(value || 0);
 
-// --- YARDIMCI BİLEŞENLER ---
-
-const StatusBadge = ({ status }) => {
+const StatusBadge = ({ status, label, onClick }) => {
   const map = {
     draft: { color: 'bg-blue-100 text-blue-800', label: 'Teklif' },
     sale: { color: 'bg-green-100 text-green-800', label: 'Sipariş' },
@@ -36,7 +37,7 @@ const StatusBadge = ({ status }) => {
     solved: { color: 'bg-green-100 text-green-800', label: 'Çözüldü' },
   };
   const conf = map[status] || { color: 'bg-gray-100', label: status };
-  return <span className={`px-2 py-1 rounded text-xs font-medium border ${conf.color}`}>{conf.label}</span>;
+  return <span onClick={onClick} className={`px-2 py-1 rounded text-xs font-medium border ${conf.color} ${onClick ? 'cursor-pointer' : ''}`}>{conf.label}</span>;
 };
 
 // Kategori Ağacı (Hiyerarşik)
@@ -105,7 +106,10 @@ export default function AscariDashboard() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [selectedOrderLines, setSelectedOrderLines] = useState([]);
   const [selectedTicket, setSelectedTicket] = useState(null);
-  
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [customerDetailTab, setCustomerDetailTab] = useState('orders');
+
   // Hızlı Teklif
   const [quickCart, setQuickCart] = useState([]);
   const [quickOfferDetails, setQuickOfferDetails] = useState(null);
@@ -137,6 +141,19 @@ export default function AscariDashboard() {
     const saved = localStorage.getItem('ascari_creds');
     if (saved) { try { setCredentials(JSON.parse(saved)); setRememberMe(true); } catch(e){} }
   }, []);
+
+  const getMenuItems = () => {
+    return [ 
+      { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard }, 
+      { id: 'quick_offer', name: 'Hızlı Teklif', icon: Zap }, 
+      { id: 'helpdesk', name: 'Teknik Servis', icon: Wrench }, 
+      { id: 'sales', name: 'Satışlar', icon: ShoppingCart }, 
+      { id: 'products', name: 'Ürünler', icon: Package }, 
+      { id: 'customers', name: 'Kontaklar', icon: Users }, 
+      { id: 'accounting', name: 'Muhasebe', icon: DollarSign }, 
+      { id: 'code', name: 'Entegrasyon', icon: Code } 
+    ];
+  };
 
   const handleConnect = async (e) => {
     e.preventDefault(); setLoading(true); setLoginError('');
@@ -208,7 +225,7 @@ export default function AscariDashboard() {
 
   const handleLogout = () => { setIsConnected(false); setActiveTab('dashboard'); setData(INITIAL_DATA); };
 
-  // --- EKRANLAR ---
+  // --- RENDERERS ---
 
   // 1. HIZLI TEKLİF & ÜRÜNLER (ORTAK BİLEŞEN)
   const renderProductGrid = (isOfferMode) => {
