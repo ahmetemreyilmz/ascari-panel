@@ -1,4 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
+} from 'recharts';
 import { 
   LayoutDashboard, ShoppingCart, Users, DollarSign, LogOut, RefreshCw, 
   Package, FileText, Code, Printer, Search, Zap, Plus, Minus, Trash2, 
@@ -8,7 +11,7 @@ import {
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 
-// --- SABİT VE YARDIMCI VERİLER ---
+// --- SABİT VERİLER ---
 const INITIAL_DATA = {
   salesStats: { totalRevenue: 0, dailyStoreRevenue: 0, activeQuotations: 0, confirmedOrders: 0 },
   monthlySales: [],
@@ -22,7 +25,7 @@ const INITIAL_DATA = {
 
 const formatCurrency = (value) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(value || 0);
 
-const StatusBadge = ({ status }) => {
+const StatusBadge = ({ status, label, onClick }) => {
   const map = {
     draft: { color: 'bg-blue-100 text-blue-800', label: 'Teklif' },
     sale: { color: 'bg-green-100 text-green-800', label: 'Sipariş' },
@@ -34,7 +37,7 @@ const StatusBadge = ({ status }) => {
     posted: { color: 'bg-indigo-100 text-indigo-800', label: 'Onaylı' }
   };
   const conf = map[status] || { color: 'bg-gray-100 text-gray-800', label: status };
-  return <span className={`px-2 py-1 rounded text-xs font-bold border ${conf.color}`}>{conf.label}</span>;
+  return <span onClick={onClick} className={`px-2 py-1 rounded text-xs font-bold border ${conf.color} ${onClick ? 'cursor-pointer' : ''}`}>{label || conf.label || status}</span>;
 };
 
 const PaymentBadge = ({ state }) => {
@@ -42,13 +45,22 @@ const PaymentBadge = ({ state }) => {
   return <span className="flex items-center text-red-500 text-xs font-bold"><AlertCircle className="w-3 h-3 mr-1"/> Ödenmedi</span>;
 }
 
-// --- BİLEŞENLER ---
+// --- MENÜ ELEMANLARI (EN ÜSTTE TANIMLANDI) ---
+const MENU_ITEMS = [ 
+  { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'sales'] }, 
+  { id: 'quick_offer', name: 'Hızlı Teklif', icon: Zap, roles: ['admin', 'sales'] }, 
+  { id: 'helpdesk', name: 'Teknik Servis', icon: Wrench, roles: ['admin', 'sales'] }, 
+  { id: 'sales', name: 'Satışlar', icon: ShoppingCart, roles: ['admin'] }, 
+  { id: 'products', name: 'Ürünler', icon: Package, roles: ['admin', 'sales'] }, 
+  { id: 'customers', name: 'Kontaklar', icon: Users, roles: ['admin'] }, 
+  { id: 'accounting', name: 'Muhasebe', icon: DollarSign, roles: ['admin'] }, 
+  { id: 'code', name: 'Entegrasyon', icon: Code, roles: ['admin'] } 
+];
 
 // Kategori Ağacı
 const CategoryTree = ({ categories, onSelect, selectedId }) => {
   const [expanded, setExpanded] = useState({});
   const toggle = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
-
   const renderNode = (nodes) => nodes.map(node => (
     <div key={node.id} className="ml-2 select-none">
       <div className={`flex items-center py-2 cursor-pointer rounded-md px-2 transition-colors ${selectedId === node.id ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-50'}`}>
@@ -65,7 +77,7 @@ const CategoryTree = ({ categories, onSelect, selectedId }) => {
   return <div className="overflow-y-auto max-h-[calc(100vh-250px)] pr-2">{renderNode(categories)}</div>;
 };
 
-// Yatay Ürün Kartı (Dokunmatik Uyumlu)
+// Yatay Ürün Kartı
 const ProductCard = ({ product, onAdd, onInfo }) => (
   <div onClick={() => onAdd(product)} className="bg-white border border-slate-200 rounded-lg p-3 flex gap-4 hover:shadow-md transition-shadow relative group h-28 cursor-pointer active:scale-95 transition-transform duration-100">
     <div className="w-24 h-full flex-shrink-0 bg-slate-50 rounded-md flex items-center justify-center overflow-hidden border border-slate-100">
@@ -96,6 +108,7 @@ export default function AscariDashboard() {
   const [loginError, setLoginError] = useState('');
   const [userRole, setUserRole] = useState('admin');
   const [rememberMe, setRememberMe] = useState(false);
+  const [logoError, setLogoError] = useState(false);
 
   // Filtreler
   const [salesFilter, setSalesFilter] = useState('all');
@@ -103,6 +116,8 @@ export default function AscariDashboard() {
   const [productSearch, setProductSearch] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [customerBalanceFilter, setCustomerBalanceFilter] = useState('all');
+  const [invoiceSearch, setInvoiceSearch] = useState('');
+  const [accountingSubTab, setAccountingSubTab] = useState('customer_invoices');
 
   // Seçimler & Detaylar
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -118,10 +133,12 @@ export default function AscariDashboard() {
   const [quickOfferDetails, setQuickOfferDetails] = useState(null);
   const [tempCustomerName, setTempCustomerName] = useState('');
   const [tempCustomerPhone, setTempCustomerPhone] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Servis
   const [showNewTicketForm, setShowNewTicketForm] = useState(false);
   const [newTicketData, setNewTicketData] = useState({ customer: '', product: '', issue: '', priority: 'medium' });
+  const [isEditingProduct, setIsEditingProduct] = useState(false);
 
   // API Fonksiyonu
   const apiCall = async (endpoint, payload) => {
@@ -215,19 +232,6 @@ export default function AscariDashboard() {
   const handleLogout = () => { setIsConnected(false); setActiveTab('dashboard'); setData(INITIAL_DATA); };
 
   // --- EKRAN RENDERLARI ---
-
-  const getMenuItems = () => {
-    return [ 
-      { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard }, 
-      { id: 'quick_offer', name: 'Hızlı Teklif', icon: Zap }, 
-      { id: 'helpdesk', name: 'Teknik Servis', icon: Wrench }, 
-      { id: 'sales', name: 'Satışlar', icon: ShoppingCart }, 
-      { id: 'products', name: 'Ürünler', icon: Package }, 
-      { id: 'customers', name: 'Kontaklar', icon: Users }, 
-      { id: 'accounting', name: 'Muhasebe', icon: DollarSign }, 
-      { id: 'code', name: 'Entegrasyon', icon: Code } 
-    ];
-  };
 
   // 1. HIZLI TEKLİF & ÜRÜN LİSTESİ
   const renderProductGrid = (isOfferMode) => {
@@ -423,18 +427,18 @@ export default function AscariDashboard() {
     );
   }
 
-  const menuItems = getMenuItems();
-
   return (
     <div className="flex h-screen bg-slate-50 font-sans">
        {renderProductModal()}
        <div className="w-20 lg:w-64 bg-slate-900 text-white flex flex-col transition-all duration-300 no-print">
           <div className="p-6 font-bold text-2xl hidden lg:block tracking-widest">ASCARI</div>
           <nav className="flex-1 space-y-1 px-2 py-4">
-             {menuItems.map(item => (
+             {MENU_ITEMS.map(item => (
+               (item.roles.includes(userRole)) && (
                 <button key={item.id} onClick={()=>setActiveTab(item.id)} className={`flex items-center w-full p-4 rounded-xl transition-colors ${activeTab===item.id ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
                    <item.icon className="w-6 h-6 lg:mr-3"/> <span className="hidden lg:inline font-medium">{item.name}</span>
                 </button>
+               )
              ))}
           </nav>
           <button onClick={handleLogout} className="flex items-center text-slate-400 hover:text-white m-4 p-2 hover:bg-slate-800 rounded"><LogOut className="w-5 h-5 mr-2"/> <span className="hidden lg:inline">Çıkış</span></button>
