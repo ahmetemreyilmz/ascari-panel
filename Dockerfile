@@ -11,4 +11,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./
 COPY --from=build-step /app/frontend/dist /app/frontend/dist
 EXPOSE 5000
-CMD ["gunicorn", "-b", "0.0.0.0:5000", "app:app"]
+CMD ["python", "-m", "gunicorn", "-b", "0.0.0.0:5000", "app:app"]
