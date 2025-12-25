@@ -14,7 +14,7 @@ def static_proxy(path):
     return send_from_directory(app.static_folder, 'index.html')
 
 def get_conn(data):
-    url = data.get('url','').rstrip('/')
+    url = data.get('url','').strip().rstrip('/')
     for s in ['/web','/odoo','#']: 
         if url.endswith(s): url = url.split(s)[0]
     if not url.startswith('http'): url = 'https://' + url
@@ -22,6 +22,21 @@ def get_conn(data):
     common = xmlrpc.client.ServerProxy(f'{url}/xmlrpc/2/common')
     uid = common.authenticate(data.get('db'), data.get('username'), data.get('password'), {})
     return url, uid, common
+
+# Kategori Ağacı
+def build_category_tree(categories):
+    tree = []
+    lookup = {}
+    for cat in categories:
+        cat['children'] = []
+        lookup[cat['id']] = cat
+    for cat in categories:
+        if cat['parent_id']:
+            parent_id = cat['parent_id'][0]
+            if parent_id in lookup: lookup[parent_id]['children'].append(cat)
+            else: tree.append(cat)
+        else: tree.append(cat)
+    return tree
 
 @app.route('/api/connect', methods=['POST'])
 def connect():
@@ -38,36 +53,73 @@ def data():
         models = xmlrpc.client.ServerProxy(f'{url}/xmlrpc/2/object')
         db, pwd = d.get('db'), d.get('password')
 
-        # Kategoriler (Ağaç Yapısı İçin Parent ID ile)
+        # Kategoriler (Ağaç)
         cats = models.execute_kw(db, uid, pwd, 'product.category', 'search_read', [], {'fields': ['id', 'name', 'parent_id']})
-        
-        # Ağaç Yapısını Oluştur (Backend'de işle)
-        cat_map = {c['id']: {'id': c['id'], 'name': c['name'], 'children': []} for c in cats}
-        tree = []
-        for c in cats:
-            if c['parent_id']:
-                pid = c['parent_id'][0]
-                if pid in cat_map: cat_map[pid]['children'].append(cat_map[c['id']])
-                else: tree.append(cat_map[c['id']])
-            else: tree.append(cat_map[c['id']])
+        categories = build_category_tree(cats)
 
-        # Ürünler (Limitli, ama hepsi aranabilir)
+        # Ürünler (Limitli, arama ile hepsi gelir)
         prods = models.execute_kw(db, uid, pwd, 'product.product', 'search_read', [[['sale_ok','=',True]]], {'fields': ['id', 'display_name', 'default_code', 'list_price', 'qty_available', 'categ_id', 'image_128'], 'limit': 100})
-        products = [{'id': p['id'], 'name': p['display_name'], 'list_price': p['list_price'], 'image_128': p['image_128'], 'categ_id': p['categ_id'] ? p['categ_id'][0] : 0, 'categ_path': str(p['categ_id'])} for p in prods]
+        products = [{'id': p['id'], 'name': p['display_name'], 'default_code': p['default_code'] or '', 'list_price': p['list_price'], 'qty_available': p['qty_available'], 'image_128': p['image_128'], 'categ_path': str(p['categ_id'])} for p in prods]
 
         # Siparişler
         orders = models.execute_kw(db, uid, pwd, 'sale.order', 'search_read', [], {'fields': ['id', 'name', 'partner_id', 'date_order', 'amount_total', 'state'], 'limit': 50, 'order': 'date_order desc'})
         clean_orders = [{'id_raw': o['id'], 'name': o['name'], 'customer': o['partner_id'][1], 'date': o['date_order'], 'amount': o['amount_total'], 'status': o['state']} for o in orders]
 
-        # Helpdesk (Hata Vermemesi İçin Try-Except)
+        # Kontaklar
+        partners = models.execute_kw(db, uid, pwd, 'res.partner', 'search_read', [], {'fields': ['id', 'name', 'phone', 'email', 'total_due', 'is_company'], 'limit': 50})
+        customers = [{'id': p['id'], 'name': p['name'], 'phone': p['phone'] or '', 'email': p['email'] or '', 'balance': p['total_due'], 'type': 'company' if p['is_company'] else 'individual'} for p in partners]
+
+        # Teknik Servis (Güvenli)
         tickets = []
         try:
-            raw_tickets = models.execute_kw(db, uid, pwd, 'helpdesk.ticket', 'search_read', [], {'fields': ['id', 'name', 'stage_id', 'description'], 'limit': 20})
-            tickets = [{'id': t['id'], 'product': t['name'], 'issue': t['description'] or '-', 'status': 'new'} for t in raw_tickets]
+            raw_tickets = models.execute_kw(db, uid, pwd, 'helpdesk.ticket', 'search_read', [], {'fields': ['id', 'name', 'partner_id', 'stage_id', 'priority', 'description'], 'limit': 20, 'order': 'create_date desc'})
+            tickets = [{'id': str(t['id']), 'product': t['name'], 'customer': t['partner_id'][1] if t['partner_id'] else 'Bilinmiyor', 'issue': t['description'] or '-', 'status': t['stage_id'][1] if t['stage_id'] else 'Yeni', 'priority': t['priority']} for t in raw_tickets]
+        except: pass
+        
+        # Faturalar
+        invoices = []
+        try:
+             raw_invoices = models.execute_kw(db, uid, pwd, 'account.move', 'search_read', [[['move_type', 'in', ['out_invoice', 'in_invoice']]]], {'fields': ['name', 'partner_id', 'invoice_date', 'amount_total', 'state', 'payment_state', 'move_type'], 'limit': 20})
+             invoices = [{'id': i['name'], 'partner': i['partner_id'][1], 'date': i['invoice_date'], 'amount': i['amount_total'], 'status': i['state'], 'payment_state': i['payment_state'], 'type': i['move_type']} for i in raw_invoices]
         except: pass
 
-        return jsonify({'categories': tree, 'products': products, 'orders': clean_orders, 'tickets': tickets, 'invoices': [], 'customers': []})
+        return jsonify({'categories': categories, 'products': products, 'customers': customers, 'orders': clean_orders, 'tickets': tickets, 'invoices': invoices})
     except Exception as e: return jsonify({"error": str(e)})
+
+@app.route('/api/search', methods=['POST'])
+def search():
+    data = request.json
+    model = data.get('model')
+    query = data.get('query')
+    try:
+        url, uid, _ = get_connection(data)
+        models = xmlrpc.client.ServerProxy(f'{url}/xmlrpc/2/object')
+        
+        domain = []
+        fields = []
+        
+        if model == 'product.product':
+            domain = ['|', ('name', 'ilike', query), ('default_code', 'ilike', query)]
+            fields = ['id', 'display_name', 'default_code', 'list_price', 'qty_available', 'categ_id', 'image_128']
+        elif model == 'res.partner':
+            domain = ['|', ('name', 'ilike', query), ('phone', 'ilike', query)]
+            fields = ['id', 'name', 'phone', 'email', 'total_due', 'is_company']
+        elif model == 'sale.order':
+            domain = [('name', 'ilike', query)]
+            fields = ['id', 'name', 'partner_id', 'date_order', 'amount_total', 'state']
+
+        results_raw = models.execute_kw(data.get('db'), uid, data.get('password'), model, 'search_read', [domain], {'fields': fields, 'limit': 50})
+        
+        results = []
+        if model == 'product.product':
+             results = [{'id': p['id'], 'name': p['display_name'], 'default_code': p['default_code'], 'list_price': p['list_price'], 'qty_available': p['qty_available'], 'image_128': p['image_128'], 'categ_path': str(p['categ_id'])} for p in results_raw]
+        elif model == 'res.partner':
+             results = [{'id': p['id'], 'name': p['name'], 'phone': p['phone'], 'email': p['email'], 'balance': p['total_due'], 'type': 'company' if p['is_company'] else 'individual'} for p in results_raw]
+        elif model == 'sale.order':
+             results = [{'id_raw': o['id'], 'name': o['name'], 'customer': o['partner_id'][1], 'date': o['date_order'], 'amount': o['amount_total'], 'status': o['state']} for o in results_raw]
+
+        return jsonify({"status": "success", "data": results})
+    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/order-details', methods=['POST'])
 def order_details():
@@ -75,14 +127,10 @@ def order_details():
     try:
         url, uid, _ = get_conn(d)
         models = xmlrpc.client.ServerProxy(f'{url}/xmlrpc/2/object')
-        
-        # Siparişin satırlarını bul
         order = models.execute_kw(d.get('db'), uid, d.get('password'), 'sale.order', 'read', [[d.get('order_id')]], {'fields': ['order_line']})
+        if not order: return jsonify({'lines': []})
         line_ids = order[0]['order_line']
-        
-        # Satır detaylarını çek
         lines = models.execute_kw(d.get('db'), uid, d.get('password'), 'sale.order.line', 'read', [line_ids], {'fields': ['name', 'product_uom_qty', 'price_unit', 'price_subtotal']})
-        
         clean_lines = [{'name': l['name'], 'qty': l['product_uom_qty'], 'price': l['price_unit'], 'total': l['price_subtotal']} for l in lines]
         return jsonify({'lines': clean_lines})
     except Exception as e: return jsonify({"error": str(e)})
