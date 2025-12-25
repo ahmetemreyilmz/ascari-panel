@@ -181,6 +181,15 @@ export default function AscariDashboard() {
      setLoadingData(false);
   };
 
+  const updateTicketStatus = async (ticketId, newStatus) => {
+      // Backend entegrasyonu gerekir, şimdilik UI update
+      setData(prev => ({
+          ...prev, 
+          tickets: prev.tickets.map(t => t.id === ticketId ? {...t, status: newStatus} : t)
+      }));
+      setSelectedTicket(prev => ({...prev, status: newStatus}));
+  };
+
   // Sepet İşlemleri
   const addToCart = useCallback((product) => {
     setQuickCart(prev => {
@@ -201,6 +210,8 @@ export default function AscariDashboard() {
         total, tax: total*0.2, grandTotal: total*1.2
     });
   };
+
+  const handleLogout = () => { setIsConnected(false); setActiveTab('dashboard'); setData(INITIAL_DATA); };
 
   // --- EKRAN RENDERLARI ---
 
