@@ -301,7 +301,7 @@ def customer_details(partner_id):
     d = request.json
     try:
         url, uid, _ = get_conn(d)
-        models = xmlrpc.client.ServerProxy(f'{url}/xmlrpc/2/object'})
+        models = xmlrpc.client.ServerProxy(f'{url}/xmlrpc/2/object')
         db, pwd = d.get('db'), d.get('password')
         
         # Sipariş ve Teklifler
@@ -360,7 +360,7 @@ def register_payment():
     d = request.json
     try:
         url, uid, _ = get_conn(d)
-        models = xmlrpc.client.ServerProxy(f'{url}/xmlrpc/2/object'})
+        models = xmlrpc.client.ServerProxy(f'{url}/xmlrpc/2/object')
         db, pwd = d.get('db'), d.get('password')
         
         partner_id = d.get('partner_id')
@@ -402,7 +402,7 @@ def helpdesk_stats():
     d = request.json
     try:
         url, uid, _ = get_conn(d)
-        models = xmlrpc.client.ServerProxy(f'{url}/xmlrpc/2/object'})
+        models = xmlrpc.client.ServerProxy(f'{url}/xmlrpc/2/object')
         db, pwd = d.get('db'), d.get('password')
         
         # Tüm ticketları çek
@@ -431,7 +431,7 @@ def ticket_update():
     d = request.json
     try:
         url, uid, _ = get_conn(d)
-        models = xmlrpc.client.ServerProxy(f'{url}/xmlrpc/2/object'})
+        models = xmlrpc.client.ServerProxy(f'{url}/xmlrpc/2/object')
         db, pwd = d.get('db'), d.get('password')
         
         ticket_id = d.get('ticket_id')
