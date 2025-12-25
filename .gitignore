@@ -1,0 +1,12 @@
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+.vscode/
+.idea/
+*.log
+.env
+.gemini/
+dist/
+build/
+*.egg-info/
