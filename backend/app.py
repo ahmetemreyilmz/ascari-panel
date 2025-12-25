@@ -57,14 +57,29 @@ def data():
         orders = models.execute_kw(db, uid, pwd, 'sale.order', 'search_read', [], {'fields': ['id', 'name', 'partner_id', 'date_order', 'amount_total', 'state'], 'limit': 100, 'order': 'date_order desc'})
         clean_orders = [{'id_raw': o['id'], 'name': o['name'], 'customer': o['partner_id'][1], 'date': o['date_order'], 'amount': o['amount_total'], 'status': o['state']} for o in orders]
 
-        # 4. Helpdesk (Hata Kontrollü)
+        # 4. Kontaklar (Güvenli Çekim - Try/Except)
+        customers = []
+        try:
+             partners_raw = models.execute_kw(db, uid, pwd, 'res.partner', 'search_read', [], {'fields': ['id', 'name', 'phone', 'email', 'total_due', 'is_company'], 'limit': 50})
+             # Not: total_due yoksa 0 ata
+             customers = [{'id': p['id'], 'name': p['name'], 'phone': p['phone'] or '', 'email': p['email'] or '', 'balance': p.get('total_due', 0), 'type': 'company' if p['is_company'] else 'individual'} for p in partners_raw]
+        except: pass
+
+        # 5. Helpdesk (Hata Kontrollü)
         tickets = []
         try:
             raw_t = models.execute_kw(db, uid, pwd, 'helpdesk.ticket', 'search_read', [], {'fields': ['id', 'name', 'partner_id', 'stage_id', 'description'], 'limit': 50})
             tickets = [{'id': t['id'], 'product': t['name'], 'customer': t['partner_id'][1] if t['partner_id'] else '-', 'issue': t['description'] or '-', 'status': 'new'} for t in raw_t]
         except: pass
+        
+        # 6. Faturalar
+        invoices = []
+        try:
+             raw_invoices = models.execute_kw(db, uid, pwd, 'account.move', 'search_read', [[['move_type', 'in', ['out_invoice', 'in_invoice']]]], {'fields': ['name', 'partner_id', 'invoice_date', 'amount_total', 'state', 'payment_state', 'move_type'], 'limit': 20})
+             invoices = [{'id': i['name'], 'partner': i['partner_id'][1], 'date': i['invoice_date'], 'amount': i['amount_total'], 'status': i['state'], 'payment_state': i['payment_state'], 'type': i['move_type']} for i in raw_invoices]
+        except: pass
 
-        return jsonify({'categories': categories, 'products': products, 'orders': clean_orders, 'tickets': tickets})
+        return jsonify({'categories': categories, 'products': products, 'customers': customers, 'orders': clean_orders, 'tickets': tickets, 'invoices': invoices})
     except Exception as e: return jsonify({"error": str(e)})
 
 @app.route('/api/search', methods=['POST'])
@@ -86,7 +101,7 @@ def search():
              fields = ['id', 'name', 'partner_id', 'date_order', 'amount_total', 'state']
         elif model == 'res.partner':
              domain = ['|', ('name', 'ilike', query), ('phone', 'ilike', query)]
-             fields = ['id', 'name', 'phone', 'email', 'total_due']
+             fields = ['id', 'name', 'phone', 'email', 'total_due', 'is_company']
              
         res = models.execute_kw(d.get('db'), uid, d.get('password'), model, 'search_read', [domain], {'fields': fields, 'limit': 100})
         
@@ -97,7 +112,7 @@ def search():
         elif model == 'sale.order':
             data = [{'id_raw': o['id'], 'name': o['name'], 'customer': o['partner_id'][1], 'date': o['date_order'], 'amount': o['amount_total'], 'status': o['state']} for o in res]
         elif model == 'res.partner':
-            data = [{'id': p['id'], 'name': p['name'], 'phone': p['phone'], 'email': p['email'], 'balance': p['total_due']} for p in res]
+            data = [{'id': p['id'], 'name': p['name'], 'phone': p['phone'], 'email': p['email'], 'balance': p.get('total_due', 0), 'type': 'company' if p['is_company'] else 'individual'} for p in res]
 
         return jsonify({"status": "success", "data": data})
     except Exception as e: return jsonify({"status": "error", "message": str(e)})

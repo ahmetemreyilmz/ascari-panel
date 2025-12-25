@@ -3,7 +3,8 @@ import {
   LayoutDashboard, ShoppingCart, Users, DollarSign, LogOut, RefreshCw, 
   Package, FileText, Code, Printer, Search, Zap, Plus, Minus, Trash2, 
   User, Wrench, CreditCard, Phone, Mail, MapPin, Calendar, Edit3, Save, 
-  CheckCircle, AlertCircle, Info, ChevronDown, ChevronRight, Layers, X
+  CheckCircle, AlertCircle, Info, ChevronDown, ChevronRight, Layers, X,
+  ArrowLeft
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 
@@ -64,9 +65,9 @@ const CategoryTree = ({ categories, onSelect, selectedId }) => {
   return <div className="overflow-y-auto max-h-[calc(100vh-250px)] pr-2">{renderNode(categories)}</div>;
 };
 
-// Yatay Ürün Kartı
+// Yatay Ürün Kartı (Dokunmatik Uyumlu)
 const ProductCard = ({ product, onAdd, onInfo }) => (
-  <div className="bg-white border border-slate-200 rounded-lg p-3 flex gap-4 hover:shadow-md transition-shadow relative group h-28">
+  <div onClick={() => onAdd(product)} className="bg-white border border-slate-200 rounded-lg p-3 flex gap-4 hover:shadow-md transition-shadow relative group h-28 cursor-pointer active:scale-95 transition-transform duration-100">
     <div className="w-24 h-full flex-shrink-0 bg-slate-50 rounded-md flex items-center justify-center overflow-hidden border border-slate-100">
        {product.image_128 ? <img src={`data:image/png;base64,${product.image_128}`} className="object-contain w-full h-full"/> : <Package className="text-slate-300 w-8 h-8"/>}
     </div>
@@ -77,10 +78,10 @@ const ProductCard = ({ product, onAdd, onInfo }) => (
        </div>
        <div className="flex justify-between items-end">
           <span className="text-indigo-600 font-bold text-base">{formatCurrency(product.list_price)}</span>
-          <button onClick={(e) => { e.stopPropagation(); onAdd(product); }} className="bg-indigo-50 text-indigo-600 p-2 rounded-full hover:bg-indigo-600 hover:text-white transition-colors shadow-sm"><Plus className="w-4 h-4"/></button>
+          <div className="bg-indigo-50 text-indigo-600 p-2 rounded-full"><Plus className="w-4 h-4"/></div>
        </div>
     </div>
-    <button onClick={(e) => { e.stopPropagation(); onInfo(product); }} className="absolute top-2 right-2 text-slate-300 hover:text-indigo-500 p-1"><Info className="w-5 h-5"/></button>
+    <button onClick={(e) => { e.stopPropagation(); onInfo(product); }} className="absolute top-2 right-2 text-slate-300 hover:text-indigo-500 p-2 z-10"><Info className="w-5 h-5"/></button>
   </div>
 );
 
@@ -101,6 +102,7 @@ export default function AscariDashboard() {
   const [customerFilter, setCustomerFilter] = useState('all');
   const [productSearch, setProductSearch] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
+  const [customerBalanceFilter, setCustomerBalanceFilter] = useState('all');
 
   // Seçimler & Detaylar
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -182,7 +184,6 @@ export default function AscariDashboard() {
   };
 
   const updateTicketStatus = async (ticketId, newStatus) => {
-      // Backend entegrasyonu gerekir, şimdilik UI update
       setData(prev => ({
           ...prev, 
           tickets: prev.tickets.map(t => t.id === ticketId ? {...t, status: newStatus} : t)
@@ -268,8 +269,8 @@ export default function AscariDashboard() {
                  <div className="flex-1 overflow-y-auto p-4 space-y-3">{quickCart.map(i => <div key={i.id} className="flex justify-between items-center border-b pb-2"><div className="flex-1 pr-2"><div className="text-sm font-medium truncate">{i.name}</div></div><div className="flex items-center gap-1 bg-slate-100 rounded"><button onClick={()=>setQuickCart(prev=>prev.map(x=>x.id===i.id?{...x,qty:Math.max(1,x.qty-1)}:x))} className="px-2">-</button><span className="text-sm font-bold">{i.qty}</span><button onClick={()=>addToCart(i)} className="px-2">+</button></div></div>)}</div>
                  <div className="p-4 border-t bg-slate-50 rounded-b-xl space-y-3">
                      <div className="flex justify-between font-bold text-lg"><span>Toplam</span><span>{formatCurrency(quickCart.reduce((a,b)=>a+(b.list_price*b.qty),0))}</span></div>
-                     <input className="w-full border p-2 rounded text-sm" placeholder="Müşteri Adı" value={tempCustomerName} onChange={e=>setTempCustomerName(e.target.value)}/>
-                     <input className="w-full border p-2 rounded text-sm" placeholder="Telefon" value={tempCustomerPhone} onChange={e=>setTempCustomerPhone(e.target.value)}/>
+                     <input className="w-full border p-2 rounded text-sm" placeholder="Müşteri Adı (Opsiyonel)" value={tempCustomerName} onChange={e=>setTempCustomerName(e.target.value)}/>
+                     <input className="w-full border p-2 rounded text-sm" placeholder="Telefon (Opsiyonel)" value={tempCustomerPhone} onChange={e=>setTempCustomerPhone(e.target.value)}/>
                      <button onClick={createQuickOffer} disabled={quickCart.length===0} className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold disabled:opacity-50">Teklif Oluştur</button>
                  </div>
              </div>
@@ -356,18 +357,52 @@ export default function AscariDashboard() {
       )
   };
 
+  const renderCustomers = () => {
+    if (selectedCustomer) {
+        return (<div className="space-y-6 animate-fadeIn no-print"><button onClick={()=>setSelectedCustomer(null)} className="flex items-center text-slate-500"><ArrowLeft className="w-4 h-4 mr-2"/> Listeye Dön</button><div className="grid grid-cols-3 gap-6"><div className="col-span-1 bg-white p-6 rounded-lg shadow text-center border-t-4 border-indigo-500"><div className="w-20 h-20 bg-slate-100 rounded-full mx-auto flex items-center justify-center text-2xl font-bold text-slate-500 mb-4">{selectedCustomer.name.charAt(0)}</div><h2 className="font-bold text-lg">{selectedCustomer.name}</h2><div className="mt-4 text-sm text-left space-y-2"><div className="flex items-center"><Mail className="w-4 h-4 mr-2 text-slate-400"/> {selectedCustomer.email}</div><div className="flex items-center"><Phone className="w-4 h-4 mr-2 text-slate-400"/> {selectedCustomer.phone}</div></div><div className="mt-6 pt-4 border-t text-2xl font-bold text-slate-800">{formatCurrency(selectedCustomer.balance)}</div><div className="text-xs text-slate-500">Bakiye</div></div><div className="col-span-2 bg-white rounded-lg shadow overflow-hidden"><div className="flex border-b"><button onClick={()=>setCustomerDetailTab('orders')} className={`flex-1 py-3 ${customerDetailTab==='orders'?'border-b-2 border-indigo-600 font-bold':''}`}>Siparişler</button><button onClick={()=>setCustomerDetailTab('invoices')} className={`flex-1 py-3 ${customerDetailTab==='invoices'?'border-b-2 border-indigo-600 font-bold':''}`}>Faturalar</button></div><div className="p-4 max-h-[400px] overflow-y-auto">{customerDetailTab==='orders' && <div className="text-center text-slate-500 py-10">Sipariş verisi yükleniyor...</div>}</div></div></div></div>)
+    }
+    const filteredContacts = data.customers.filter(c => customerBalanceFilter==='all' ? true : customerBalanceFilter==='debtor' ? c.balance > 0 : c.balance <= 0);
+    return (
+        <div className="space-y-6 no-print">
+            <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm">
+                <div className="flex space-x-2">
+                    <button onClick={()=>setCustomerBalanceFilter('all')} className={`px-3 py-1 rounded text-xs ${customerBalanceFilter==='all'?'bg-indigo-100':'bg-slate-100'}`}>Tümü</button>
+                    <button onClick={()=>setCustomerBalanceFilter('debtor')} className={`px-3 py-1 rounded text-xs ${customerBalanceFilter==='debtor'?'bg-red-100':'bg-slate-100'}`}>Borçlular</button>
+                    <button onClick={()=>setCustomerBalanceFilter('creditor')} className={`px-3 py-1 rounded text-xs ${customerBalanceFilter==='creditor'?'bg-green-100':'bg-slate-100'}`}>Alacaklılar</button>
+                </div>
+                <div className="flex gap-2">
+                   <input className="border p-2 rounded text-sm" placeholder="Cari Ara..." onKeyDown={(e)=>e.key==='Enter' && performSearch('res.partner', e.target.value)} />
+                   <button className="bg-indigo-600 text-white px-3 rounded">Ara</button>
+                </div>
+            </div>
+            <div className="bg-white shadow rounded-lg overflow-hidden">
+                <ul className="divide-y">
+                    {filteredContacts.map(c => (
+                        <li key={c.id} onClick={()=>setSelectedCustomer(c)} className="p-4 flex justify-between hover:bg-slate-50 cursor-pointer">
+                            <div><div className="font-bold">{c.name}</div><div className="text-xs text-slate-500">{c.phone}</div></div>
+                            <div className={`font-bold ${c.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>{formatCurrency(c.balance)}</div>
+                        </li>
+                    ))}
+                </ul>
+            </div>
+        </div>
+    );
+  };
+
+  const renderAccounting = () => { if (selectedInvoice) { return (<div className="space-y-6 animate-fadeIn"><button onClick={() => setSelectedInvoice(null)} className="flex items-center text-slate-500 hover:text-slate-900 mb-4"><ArrowLeft className="w-5 h-5 mr-2" /> Faturalara Dön</button><div className="bg-white shadow rounded-lg p-8 border border-slate-200 relative"><div className="absolute top-0 right-0 p-4"><PaymentBadge state={selectedInvoice.payment_state} /></div><h2 className="text-2xl font-bold text-slate-800 mb-1">{selectedInvoice.id}</h2><p className="text-slate-500 mb-6">{selectedInvoice.date}</p><div className="grid grid-cols-2 gap-8 mb-8"><div><h4 className="font-bold text-gray-500 text-xs uppercase">Muhatap</h4><p className="text-lg">{selectedInvoice.partner}</p></div><div className="text-right"><h4 className="font-bold text-gray-500 text-xs uppercase">Tutar</h4><p className="text-2xl font-bold text-indigo-600">{formatCurrency(selectedInvoice.amount)}</p></div></div></div></div>) } return (<div className="space-y-6 animate-fadeIn"><div className="flex flex-col sm:flex-row justify-between items-center border-b border-slate-200 pb-4"><nav className="flex space-x-4 mb-4 sm:mb-0"><button onClick={() => setAccountingSubTab('customer_invoices')} className={`${accountingSubTab === 'customer_invoices' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'} px-4 py-2 rounded-lg font-medium text-sm flex items-center`}><ArrowUpRight className="w-4 h-4 mr-2" /> Giden Faturalar</button><button onClick={() => setAccountingSubTab('vendor_bills')} className={`${accountingSubTab === 'vendor_bills' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'} px-4 py-2 rounded-lg font-medium text-sm flex items-center`}><ArrowDownLeft className="w-4 h-4 mr-2" /> Gelen Faturalar</button></nav><div className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400"/><input type="text" placeholder="Fatura Ara..." className="pl-9 pr-4 py-2 border border-slate-300 rounded-md text-sm w-64" value={invoiceSearch} onChange={e=>setInvoiceSearch(e.target.value)}/></div></div><div className="bg-white shadow overflow-hidden sm:rounded-lg"><table className="min-w-full divide-y divide-slate-200"><thead className="bg-slate-50"><tr><th className="px-6 py-3 text-left text-xs font-medium text-slate-500">No</th><th className="px-6 py-3 text-left text-xs font-medium text-slate-500">{accountingSubTab === 'customer_invoices' ? 'Müşteri' : 'Tedarikçi'}</th><th className="px-6 py-3 text-left text-xs font-medium text-slate-500">Tarih</th><th className="px-6 py-3 text-right text-xs font-medium text-slate-500">Tutar</th><th className="px-6 py-3 text-center text-xs font-medium text-slate-500">Durum</th><th className="px-6 py-3 text-center text-xs font-medium text-slate-500">Ödeme</th></tr></thead><tbody className="bg-white divide-y divide-slate-200">{data.invoices.filter(inv => (accountingSubTab === 'customer_invoices' ? inv.type === 'out_invoice' : inv.type === 'in_invoice')).map((inv) => (<tr key={inv.id} onClick={() => setSelectedInvoice(inv)} className="hover:bg-slate-50 cursor-pointer"><td className="px-6 py-4 text-sm font-medium text-indigo-600">{inv.id}</td><td className="px-6 py-4 text-sm text-slate-900">{inv.partner}</td><td className="px-6 py-4 text-sm text-slate-500">{inv.date}</td><td className="px-6 py-4 text-sm text-slate-900 font-bold text-right">{formatCurrency(inv.amount)}</td><td className="px-6 py-4 text-center"><StatusBadge status={inv.status} /></td><td className="px-6 py-4 flex justify-center"><PaymentBadge state={inv.payment_state} /></td></tr>))}</tbody></table></div></div>); };
+
   if (!isConnected) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-100">
-           <div className="text-center mb-8"><h2 className="text-2xl font-bold text-slate-800">Yönetim Paneli</h2></div>
+           <div className="text-center mb-8"><div className="inline-block p-3 bg-slate-900 rounded-xl mb-3"><img src="Ascari Beyaz Logo.png" className="h-8 invert brightness-0 filter" onError={(e)=>e.target.style.display='none'}/></div><h2 className="text-2xl font-bold text-slate-800">Yönetim Paneli</h2></div>
            {loginError && <div className="bg-red-50 text-red-600 p-3 rounded mb-4 text-sm border-l-4 border-red-500">{loginError}</div>}
            <form onSubmit={handleConnect} className="space-y-4">
               <input className="w-full p-4 border rounded-xl bg-slate-50" placeholder="Odoo Adresi" value={credentials.url} onChange={e=>setCredentials({...credentials, url:e.target.value})}/>
               <input className="w-full p-4 border rounded-xl bg-slate-50" placeholder="Veritabanı" value={credentials.db} onChange={e=>setCredentials({...credentials, db:e.target.value})}/>
               <input className="w-full p-4 border rounded-xl bg-slate-50" placeholder="E-Posta" value={credentials.username} onChange={e=>setCredentials({...credentials, username:e.target.value})}/>
               <input className="w-full p-4 border rounded-xl bg-slate-50" type="password" placeholder="Şifre" value={credentials.password} onChange={e=>setCredentials({...credentials, password:e.target.value})}/>
-              <div className="flex items-center gap-2"><input type="checkbox" checked={rememberMe} onChange={e=>setRememberMe(e.target.checked)}/> <span>Beni Hatırla</span></div>
+              <div className="flex items-center gap-2 mt-2"><input type="checkbox" checked={rememberMe} onChange={e=>setRememberMe(e.target.checked)}/> <span>Beni Hatırla</span></div>
               <button disabled={loading} className="w-full bg-slate-900 text-white p-4 rounded-xl font-bold">{loading ? 'Bağlanıyor...' : 'Giriş Yap'}</button>
            </form>
         </div>
@@ -375,21 +410,15 @@ export default function AscariDashboard() {
     );
   }
 
+  const menuItems = getMenuItems();
+
   return (
     <div className="flex h-screen bg-slate-50 font-sans">
        {renderProductModal()}
        <div className="w-20 lg:w-64 bg-slate-900 text-white flex flex-col transition-all duration-300 no-print">
           <div className="p-6 font-bold text-2xl hidden lg:block tracking-widest">ASCARI</div>
           <nav className="flex-1 space-y-1 px-2 py-4">
-             {[ 
-                { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard }, 
-                { id: 'quick_offer', name: 'Hızlı Teklif', icon: Zap }, 
-                { id: 'sales', name: 'Satışlar', icon: ShoppingCart }, 
-                { id: 'products', name: 'Ürünler', icon: Package }, 
-                { id: 'customers', name: 'Kontaklar', icon: Users }, 
-                { id: 'helpdesk', name: 'Teknik Servis', icon: Wrench },
-                { id: 'accounting', name: 'Muhasebe', icon: DollarSign }, 
-             ].map(item => (
+             {menuItems.map(item => (
                 <button key={item.id} onClick={()=>setActiveTab(item.id)} className={`flex items-center w-full p-4 rounded-xl transition-colors ${activeTab===item.id ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
                    <item.icon className="w-6 h-6 lg:mr-3"/> <span className="hidden lg:inline font-medium">{item.name}</span>
                 </button>
@@ -405,7 +434,8 @@ export default function AscariDashboard() {
              {activeTab === 'products' && renderProductGrid(false)}
              {activeTab === 'sales' && renderSales()}
              {activeTab === 'helpdesk' && renderHelpdesk()}
-             {['customers','accounting'].includes(activeTab) && <div className="text-center py-10 text-slate-500">Liste Görünümü (Hazırlanıyor)</div>}
+             {activeTab === 'customers' && renderCustomers()}
+             {activeTab === 'accounting' && renderAccounting()}
           </div>
        </div>
     </div>
