@@ -417,16 +417,21 @@ def register_payment():
         if note:
             ref_parts.append(note)
         
-        ref = ' - '.join(ref_parts) if ref_parts else 'Panel Ödeme'
+        communication = ' - '.join(ref_parts) if ref_parts else 'Panel Ödeme'
         
         # Ödeme kaydı oluştur
         payment_data = {
             'partner_id': partner_id,
             'amount': amount,
             'payment_type': payment_type,
-            'partner_type': 'customer',
-            'ref': ref
+            'partner_type': 'customer'
         }
+        
+        # Communication alanını ekle (bazı Odoo versiyonlarında bu alan olabilir)
+        try:
+            payment_data['communication'] = communication
+        except:
+            pass
         
         if journal_id:
             payment_data['journal_id'] = journal_id
