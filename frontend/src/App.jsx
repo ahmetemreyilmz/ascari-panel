@@ -497,7 +497,49 @@ export default function AscariDashboard() {
       <div className="flex-1 overflow-hidden flex flex-col">
         <div className="flex-1 overflow-auto p-4 lg:p-6 relative">
           {loadingData && <div className="absolute top-0 left-0 right-0 h-1 bg-indigo-200 overflow-hidden z-50"><div className="h-full bg-indigo-600 animate-progress"></div></div>}
-          {activeTab === 'dashboard' && <div className="text-center py-20 text-slate-400">Dashboard Raporları</div>}
+          {activeTab === 'dashboard' && (
+            <div className="space-y-6">
+              <h1 className="text-3xl font-bold text-slate-800">Dashboard</h1>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="bg-white p-6 rounded-xl shadow border-l-4 border-indigo-500">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-slate-500 text-sm font-medium">Toplam Teklifler</p>
+                      <h3 className="text-3xl font-bold text-slate-800 mt-2">{data.orders?.filter(o => o.status === 'draft').length || 0}</h3>
+                    </div>
+                    <Zap className="w-12 h-12 text-indigo-500 opacity-20" />
+                  </div>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow border-l-4 border-green-500">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-slate-500 text-sm font-medium">Toplam Siparişler</p>
+                      <h3 className="text-3xl font-bold text-slate-800 mt-2">{data.orders?.filter(o => o.status !== 'draft').length || 0}</h3>
+                    </div>
+                    <ShoppingCart className="w-12 h-12 text-green-500 opacity-20" />
+                  </div>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow border-l-4 border-blue-500">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-slate-500 text-sm font-medium">Toplam Müşteriler</p>
+                      <h3 className="text-3xl font-bold text-slate-800 mt-2">{data.customers?.length || 0}</h3>
+                    </div>
+                    <Users className="w-12 h-12 text-blue-500 opacity-20" />
+                  </div>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow border-l-4 border-orange-500">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-slate-500 text-sm font-medium">Açık Ticketlar</p>
+                      <h3 className="text-3xl font-bold text-slate-800 mt-2">{data.tickets?.length || 0}</h3>
+                    </div>
+                    <Wrench className="w-12 h-12 text-orange-500 opacity-20" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           {activeTab === 'quick_offer' && renderProductGrid(true)}
           {activeTab === 'sales' && renderSales()}
           {activeTab === 'helpdesk' && renderHelpdesk()}
