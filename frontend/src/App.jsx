@@ -1006,7 +1006,7 @@ export default function AscariDashboard() {
               </div>
 
               {/* Tab Content */}
-              <div className="p-4 max-h-[600px] overflow-y-auto">
+              <div className="p-4 max-h-[700px] md:max-h-[800px] overflow-y-auto">
                 {customerDetailTab === 'orders' && (
                   <div>
                     {customerOrders.length > 0 ? (
@@ -1222,7 +1222,24 @@ export default function AscariDashboard() {
                       {customerPayments.length > 0 ? (
                         <div className="space-y-2">
                           {customerPayments.map(p => (
-                            <div key={p.id} className="border rounded-lg p-3 md:p-4 bg-green-50">
+                            <div
+                              key={p.id}
+                              onClick={() => {
+                                // Makbuz göster
+                                const receipt = {
+                                  receiptNo: p.name || 'MKB-' + p.id,
+                                  customer: selectedCustomer.name,
+                                  amount: p.amount,
+                                  date: p.date,
+                                  method: 'cash',
+                                  methodLabel: 'Odoo Tahsilat',
+                                  note: '',
+                                  timestamp: new Date(p.date).toLocaleString('tr-TR')
+                                };
+                                setPaymentReceipt(receipt);
+                              }}
+                              className="border rounded-lg p-3 md:p-4 bg-green-50 cursor-pointer hover:bg-green-100 transition-colors"
+                            >
                               <div className="flex justify-between items-start mb-1">
                                 <div className="font-bold text-green-700 text-sm md:text-base">{formatCurrency(p.amount)}</div>
                                 <div className="text-xs text-slate-500">{p.date}</div>
@@ -1372,7 +1389,25 @@ export default function AscariDashboard() {
                       {customerOutboundPayments.length > 0 ? (
                         <div className="space-y-2">
                           {customerOutboundPayments.map(p => (
-                            <div key={p.id} className="border rounded-lg p-3 md:p-4 bg-red-50">
+                            <div
+                              key={p.id}
+                              onClick={() => {
+                                // Ödeme makbuzu göster
+                                const receipt = {
+                                  receiptNo: p.name || 'ODM-' + p.id,
+                                  customer: selectedCustomer.name,
+                                  amount: p.amount,
+                                  date: p.date,
+                                  method: 'cash',
+                                  methodLabel: 'Odoo Ödeme',
+                                  note: '',
+                                  timestamp: new Date(p.date).toLocaleString('tr-TR'),
+                                  isOutbound: true
+                                };
+                                setPaymentReceipt(receipt);
+                              }}
+                              className="border rounded-lg p-3 md:p-4 bg-red-50 cursor-pointer hover:bg-red-100 transition-colors"
+                            >
                               <div className="flex justify-between items-start mb-1">
                                 <div className="font-bold text-red-700 text-sm md:text-base">{formatCurrency(p.amount)}</div>
                                 <div className="text-xs text-slate-500">{p.date}</div>
