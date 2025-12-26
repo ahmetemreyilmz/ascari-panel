@@ -56,45 +56,67 @@ const MENU_ITEMS = [
   { id: 'code', name: 'Entegrasyon', icon: Code, roles: ['admin'] }
 ];
 
-// Kategori Ağacı
+// Kategori Ağacı - Geliştirilmiş (Tek Tıkla Aç + Filtrele)
 const CategoryTree = ({ categories, onSelect, selectedId }) => {
   const [expanded, setExpanded] = useState({});
-  const toggle = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+  const handleClick = (node) => {
+    // Hem genişlet hem de filtrele
+    if (node.children && node.children.length > 0) {
+      setExpanded(prev => ({ ...prev, [node.id]: !prev[node.id] }));
+    }
+    onSelect(node.id);
+  };
   const renderNode = (nodes) => nodes.map(node => (
     <div key={node.id} className="ml-2 select-none">
-      <div className={`flex items-center py-2 cursor-pointer rounded-md px-2 transition-colors ${selectedId === node.id ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-50'}`}>
+      <div
+        onClick={() => handleClick(node)}
+        className={`flex items-center py-3 px-3 cursor-pointer rounded-md transition-colors touch-target ${selectedId === node.id
+          ? 'bg-indigo-50 text-indigo-700 font-bold'
+          : 'text-slate-600 hover:bg-slate-50 active:bg-slate-100'
+          }`}
+      >
         {node.children && node.children.length > 0 && (
-          <button onClick={(e) => { e.stopPropagation(); toggle(node.id); }} className="mr-1 text-slate-400 hover:text-slate-600 p-1">
-            {expanded[node.id] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-          </button>
+          <ChevronRight className={`w-5 h-5 mr-2 text-slate-400 transition-transform ${expanded[node.id] ? 'rotate-90' : ''
+            }`} />
         )}
-        <span onClick={() => onSelect(node.id)} className="text-sm w-full truncate">{node.name}</span>
+        <span className="text-sm w-full truncate">{node.name}</span>
       </div>
-      {expanded[node.id] && node.children && <div className="border-l border-slate-200 ml-2 pl-1">{renderNode(node.children)}</div>}
+      {expanded[node.id] && node.children && <div className="border-l border-slate-200 ml-3 pl-1">{renderNode(node.children)}</div>}
     </div>
   ));
-  return <div className="overflow-y-auto max-h-[calc(100vh-250px)] pr-2">{renderNode(categories)}</div>;
+  return <div className="overflow-y-auto max-h-[calc(100vh-250px)] pr-2">{renderNode(categories)}</div>
 };
 
-// Yatay Ürün Kartı - Dokunmatik Optimize
-const ProductCard = ({ product, onAdd, onInfo }) => (
-  <div onClick={() => onAdd(product)} className="bg-white border-2 border-slate-200 rounded-lg p-4 flex gap-4 hover:shadow-lg hover:border-indigo-300 transition-all relative group min-h-[120px] cursor-pointer active:scale-95 active:shadow-xl transition-transform duration-150 touch-manipulation">
-    <div className="w-28 h-full flex-shrink-0 bg-slate-50 rounded-md flex items-center justify-center overflow-hidden border border-slate-100">
-      {product.image_128 ? <img src={`data:image/png;base64,${product.image_128}`} className="object-contain w-full h-full" /> : <Package className="text-slate-300 w-10 h-10" />}
-    </div>
-    <div className="flex-1 flex flex-col justify-between py-1">
-      <div>
-        <h4 className="text-slate-800 font-medium text-base leading-snug line-clamp-2 pr-8">{product.name}</h4>
-        <p className="text-sm text-slate-400 mt-1 font-mono">{product.default_code}</p>
+// Yatay Ürün Kartı - Dokunmatik Optimize + Ölçüler
+const ProductCard = ({ product, onAdd, onInfo }) => {
+  const hasDimensions = product.x_assembled_width || product.x_assembled_depth || product.x_assembled_height;
+  return (
+    <div onClick={() => onAdd(product)} className="bg-white border-2 border-slate-200 rounded-lg p-4 flex gap-4 hover:shadow-lg hover:border-indigo-300 transition-all relative group min-h-[120px] cursor-pointer active:scale-95 active:shadow-xl transition-transform duration-150 touch-manipulation">
+      <div className="w-28 h-full flex-shrink-0 bg-slate-50 rounded-md flex items-center justify-center overflow-hidden border border-slate-100">
+        {product.image_128 ? <img src={`data:image/png;base64,${product.image_128}`} className="object-contain w-full h-full" /> : <Package className="text-slate-300 w-10 h-10" />}
       </div>
-      <div className="flex justify-between items-end mt-2">
-        <span className="text-indigo-600 font-bold text-lg">{formatCurrency(product.list_price)}</span>
-        <div className="bg-indigo-50 text-indigo-600 p-3 rounded-full"><Plus className="w-5 h-5" /></div>
+      <div className="flex-1 flex flex-col justify-between py-1">
+        <div>
+          <h4 className="text-slate-800 font-medium text-base leading-snug line-clamp-2 pr-8">{product.name}</h4>
+          <p className="text-sm text-slate-400 mt-1 font-mono">{product.default_code}</p>
+          {hasDimensions && (
+            <div className="mt-1.5 text-xs text-slate-500 font-mono flex items-center gap-1">
+              <Layers className="w-3 h-3" />
+              <span>
+                {product.x_assembled_width || '-'} × {product.x_assembled_depth || '-'} × {product.x_assembled_height || '-'} cm
+              </span>
+            </div>
+          )}
+        </div>
+        <div className="flex justify-between items-end mt-2">
+          <span className="text-indigo-600 font-bold text-lg">{formatCurrency(product.list_price)}</span>
+          <div className="bg-indigo-50 text-indigo-600 p-3 rounded-full"><Plus className="w-5 h-5" /></div>
+        </div>
       </div>
+      <button onClick={(e) => { e.stopPropagation(); onInfo(product); }} className="absolute top-3 right-3 text-slate-300 hover:text-indigo-500 p-3 z-10 touch-manipulation"><Info className="w-6 h-6" /></button>
     </div>
-    <button onClick={(e) => { e.stopPropagation(); onInfo(product); }} className="absolute top-3 right-3 text-slate-300 hover:text-indigo-500 p-3 z-10 touch-manipulation"><Info className="w-6 h-6" /></button>
-  </div>
-);
+  );
+};
 
 // --- ANA UYGULAMA ---
 export default function AscariDashboard() {
@@ -145,7 +167,11 @@ export default function AscariDashboard() {
   const [customerQuotes, setCustomerQuotes] = useState([]);
   const [customerTickets, setCustomerTickets] = useState([]);
   const [customerPayments, setCustomerPayments] = useState([]);
-  const [newPayment, setNewPayment] = useState({ amount: '', date: '', method: 'cash', note: '' });
+  const [newPayment, setNewPayment] = useState({ amount: '', date: '', method: 'cash', note: '', journal_id: '', installments: 1 });
+
+  // Payment Journals (Kasa, Banka)
+  const [cashRegisters, setCashRegisters] = useState([]);
+  const [banks, setBanks] = useState([]);
 
   // Servis
   const [showNewTicketForm, setShowNewTicketForm] = useState(false);
@@ -252,18 +278,58 @@ export default function AscariDashboard() {
   useEffect(() => {
     if (selectedCustomer) {
       fetchCustomerData(selectedCustomer.id);
+      fetchPaymentJournals();
     }
   }, [selectedCustomer, fetchCustomerData]);
 
-  const savePayment = () => {
-    const payment = {
-      id: Date.now(),
-      ...newPayment,
-      customer: selectedCustomer?.name,
-      timestamp: new Date().toISOString()
-    };
-    setCustomerPayments(prev => [payment, ...prev]);
-    setNewPayment({ amount: '', date: '', method: 'cash', note: '' });
+  const fetchPaymentJournals = async () => {
+    const res = await apiCall('payment-journals', {});
+    if (res && res.status === 'success') {
+      setCashRegisters(res.cash_registers || []);
+      setBanks(res.banks || []);
+      // İlk journal'ı default olarak seç
+      if (res.cash_registers && res.cash_registers.length > 0) {
+        setNewPayment(prev => ({ ...prev, journal_id: res.cash_registers[0].id }));
+      }
+    }
+  };
+
+  const savePayment = async () => {
+    if (!newPayment.amount || !newPayment.date || !newPayment.journal_id) {
+      alert('Lütfen tüm alanları doldurun');
+      return;
+    }
+
+    setLoadingData(true);
+    const res = await apiCall('register-payment', {
+      partner_id: selectedCustomer.id,
+      amount: parseFloat(newPayment.amount),
+      date: newPayment.date,
+      journal_id: parseInt(newPayment.journal_id),
+      payment_method: newPayment.method,
+      installments: parseInt(newPayment.installments) || 1,
+      payment_type: 'inbound',
+      note: newPayment.note || ''
+    });
+    setLoadingData(false);
+
+    if (res && res.status === 'success') {
+      // Add to local state
+      const payment = {
+        id: res.payment_id,
+        amount: newPayment.amount,
+        date: newPayment.date,
+        method: newPayment.method,
+        note: newPayment.note,
+        installments: newPayment.installments,
+        timestamp: new Date().toISOString()
+      };
+      setCustomerPayments(prev => [payment, ...prev]);
+      setNewPayment({ amount: '', date: '', method: 'cash', note: '', journal_id: cashRegisters[0]?.id || '', installments: 1 });
+      alert('Ödeme başarıyla kaydedildi!');
+    } else {
+      alert('Ödeme kaydedilemedi: ' + (res?.message || 'Bilinmeyen hata'));
+    }
   };
 
   // Sepet İşlemleri
@@ -789,7 +855,7 @@ export default function AscariDashboard() {
 
                 {customerDetailTab === 'payments' && (
                   <div className="space-y-4">
-                    {/* Payment Form */}
+                    {/* Advanced Payment Form */}
                     <div className="border-2 border-indigo-200 rounded-lg p-4 bg-indigo-50">
                       <h3 className="font-bold mb-4 text-sm md:text-base">Yeni Ödeme Kaydet</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -809,15 +875,79 @@ export default function AscariDashboard() {
                         <select
                           className="border-2 p-3 rounded-lg touch-target"
                           value={newPayment.method}
-                          onChange={e => setNewPayment({ ...newPayment, method: e.target.value })}
+                          onChange={e => {
+                            const method = e.target.value;
+                            let journal_id = '';
+                            if (method === 'cash' && cashRegisters.length > 0) {
+                              journal_id = cashRegisters[0].id;
+                            } else if ((method === 'card' || method === 'transfer') && banks.length > 0) {
+                              journal_id = banks[0].id;
+                            }
+                            setNewPayment({ ...newPayment, method, journal_id, installments: 1 });
+                          }}
                         >
                           <option value="cash">Nakit</option>
                           <option value="card">Kredi Kartı</option>
                           <option value="transfer">Havale/EFT</option>
                         </select>
+
+                        {/* Conditional: Nakit - Kasa Seçimi */}
+                        {newPayment.method === 'cash' && (
+                          <select
+                            className="border-2 p-3 rounded-lg touch-target bg-yellow-50"
+                            value={newPayment.journal_id}
+                            onChange={e => setNewPayment({ ...newPayment, journal_id: e.target.value })}
+                          >
+                            <option value="">Kasa Seçin</option>
+                            {cashRegisters.map(r => (
+                              <option key={r.id} value={r.id}>{r.name} ({r.code})</option>
+                            ))}
+                          </select>
+                        )}
+
+                        {/* Conditional: Kredi Kartı - Banka + Taksit */}
+                        {newPayment.method === 'card' && (
+                          <>
+                            <select
+                              className="border-2 p-3 rounded-lg touch-target bg-blue-50"
+                              value={newPayment.journal_id}
+                              onChange={e => setNewPayment({ ...newPayment, journal_id: e.target.value })}
+                            >
+                              <option value="">Banka Seçin</option>
+                              {banks.map(b => (
+                                <option key={b.id} value={b.id}>{b.name}</option>
+                              ))}
+                            </select>
+                            <select
+                              className="border-2 p-3 rounded-lg touch-target bg-blue-50"
+                              value={newPayment.installments}
+                              onChange={e => setNewPayment({ ...newPayment, installments: e.target.value })}
+                            >
+                              <option value={1}>Tek Çekim</option>
+                              {[2, 3, 4, 5, 6, 7, 8, 9].map(i => (
+                                <option key={i} value={i}>{i} Taksit</option>
+                              ))}
+                            </select>
+                          </>
+                        )}
+
+                        {/* Conditional: Havale/EFT - Banka Hesabı */}
+                        {newPayment.method === 'transfer' && (
+                          <select
+                            className="border-2 p-3 rounded-lg touch-target bg-green-50"
+                            value={newPayment.journal_id}
+                            onChange={e => setNewPayment({ ...newPayment, journal_id: e.target.value })}
+                          >
+                            <option value="">Banka Hesabı Seçin</option>
+                            {banks.map(b => (
+                              <option key={b.id} value={b.id}>{b.name}</option>
+                            ))}
+                          </select>
+                        )}
+
                         <input
                           type="text"
-                          className="border-2 p-3 rounded-lg touch-target"
+                          className="border-2 p-3 rounded-lg touch-target md:col-span-2"
                           placeholder="Not (Opsiyonel)"
                           value={newPayment.note}
                           onChange={e => setNewPayment({ ...newPayment, note: e.target.value })}
@@ -825,11 +955,16 @@ export default function AscariDashboard() {
                       </div>
                       <button
                         onClick={savePayment}
-                        disabled={!newPayment.amount || !newPayment.date}
-                        className="w-full mt-3 bg-indigo-600 text-white p-3 rounded-lg font-medium touch-target disabled:opacity-50"
+                        disabled={!newPayment.amount || !newPayment.date || !newPayment.journal_id}
+                        className="w-full mt-3 bg-indigo-600 text-white p-3 rounded-lg font-medium touch-target disabled:opacity-50 hover:bg-indigo-700"
                       >
                         Ödeme Kaydet
                       </button>
+                      {(!cashRegisters.length && !banks.length) && (
+                        <div className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded">
+                          ⚠️ Odoo'da kasa veya banka journal'ı bulunamadı. Lütfen Odoo'da journal oluşturun.
+                        </div>
+                      )}
                     </div>
 
                     {/* Payment History */}
@@ -970,8 +1105,8 @@ export default function AscariDashboard() {
                   setIsMobileMenuOpen(false);
                 }}
                 className={`flex items-center w-full p-4 rounded-xl transition-colors touch-target ${activeTab === item.id
-                    ? 'bg-indigo-600 text-white shadow-md'
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                   }`}
               >
                 <item.icon className="w-6 h-6 mr-3 md:mr-0 lg:mr-3" />
@@ -1012,7 +1147,11 @@ export default function AscariDashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-slate-500 text-sm font-medium">Toplam Teklifler</p>
-                      <h3 className="text-2xl md:text-3xl font-bold text-slate-800 mt-2">{data.orders?.filter(o => o.status === 'draft').length || 0}</h3>
+                      <h3 className="text-xl md:text-2xl font-bold text-slate-800 mt-2">
+                        {formatCurrency(
+                          data.orders?.filter(o => o.status === 'draft').reduce((sum, o) => sum + (o.amount || 0), 0) || 0
+                        )}
+                      </h3>
                     </div>
                     <Zap className="w-10 h-10 md:w-12 md:h-12 text-indigo-500 opacity-20" />
                   </div>
@@ -1021,7 +1160,11 @@ export default function AscariDashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-slate-500 text-sm font-medium">Toplam Siparişler</p>
-                      <h3 className="text-2xl md:text-3xl font-bold text-slate-800 mt-2">{data.orders?.filter(o => o.status !== 'draft').length || 0}</h3>
+                      <h3 className="text-xl md:text-2xl font-bold text-slate-800 mt-2">
+                        {formatCurrency(
+                          data.orders?.filter(o => o.status !== 'draft').reduce((sum, o) => sum + (o.amount || 0), 0) || 0
+                        )}
+                      </h3>
                     </div>
                     <ShoppingCart className="w-10 h-10 md:w-12 md:h-12 text-green-500 opacity-20" />
                   </div>

@@ -358,9 +358,36 @@ def customer_details(partner_id):
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)})
 
+
+@app.route('/api/payment-journals', methods=['POST'])
+def payment_journals():
+    """Kasa, banka ve banka hesapları için journal'ları getirir"""
+    d = request.json
+    try:
+        url, uid, _ = get_conn(d)
+        models = xmlrpc.client.ServerProxy(f'{url}/xmlrpc/2/object')
+        db, pwd = d.get('db'), d.get('password')
+        
+        # Tüm journal'ları çek (cash ve bank)
+        journals = models.execute_kw(db, uid, pwd, 'account.journal', 'search_read',
+            [[['type', 'in', ['cash', 'bank']]]], 
+            {'fields': ['id', 'name', 'type', 'code', 'currency_id']})
+        
+        cash_journals = [j for j in journals if j['type'] == 'cash']
+        bank_journals = [j for j in journals if j['type'] == 'bank']
+        
+        return jsonify({
+            'status': 'success',
+            'cash_registers': cash_journals,
+            'banks': bank_journals
+        })
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)})
+
 @app.route('/api/register-payment', methods=['POST'])
 def register_payment():
-    """Tahsilat veya ödeme kaydeder"""
+    """Tahsilat veya ödeme kaydeder - Gelişmiş (Journal, Taksit, Yöntem)"""
     d = request.json
     try:
         url, uid, _ = get_conn(d)
@@ -369,8 +396,28 @@ def register_payment():
         
         partner_id = d.get('partner_id')
         amount = d.get('amount', 0)
-        payment_type = d.get('payment_type', 'inbound')  # inbound=tahsilat, outbound=ödeme
-        memo = d.get('memo', '')
+        journal_id = d.get('journal_id')  # Kasa veya Banka ID
+        payment_method = d.get('payment_method', 'cash')  # cash, card, transfer
+        installments = d.get('installments', 1)  # Taksit sayısı (kredi kartı için)
+        payment_type = d.get('payment_type', 'inbound')  # inbound=tahsilat
+        date = d.get('date', '')  # Ödeme tarihi
+        note = d.get('note', '')
+        
+        # Reference oluştur
+        ref_parts = []
+        if payment_method == 'cash':
+            ref_parts.append('Nakit Ödeme')
+        elif payment_method == 'card':
+            ref_parts.append('Kredi Kartı')
+            if installments > 1:
+                ref_parts.append(f'{installments} Taksit')
+        elif payment_method == 'transfer':
+            ref_parts.append('Havale/EFT')
+        
+        if note:
+            ref_parts.append(note)
+        
+        ref = ' - '.join(ref_parts) if ref_parts else 'Panel Ödeme'
         
         # Ödeme kaydı oluştur
         payment_data = {
@@ -378,8 +425,14 @@ def register_payment():
             'amount': amount,
             'payment_type': payment_type,
             'partner_type': 'customer',
-            'ref': memo or 'Mağaza Panel Ödeme'
+            'ref': ref
         }
+        
+        if journal_id:
+            payment_data['journal_id'] = journal_id
+        
+        if date:
+            payment_data['date'] = date
         
         payment_id = models.execute_kw(db, uid, pwd, 'account.payment', 'create', [payment_data])
         
@@ -387,7 +440,11 @@ def register_payment():
         try:
             models.execute_kw(db, uid, pwd, 'account.payment', 'action_post', [[payment_id]])
         except:
-            pass  # Odoo v19'da farklı method olabilir
+            # Farklı Odoo versiyonları için alternatif
+            try:
+                models.execute_kw(db, uid, pwd, 'account.payment', 'post', [[payment_id]])
+            except:
+                pass
         
         return jsonify({
             'status': 'success',
