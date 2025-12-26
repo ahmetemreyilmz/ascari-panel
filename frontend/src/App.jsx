@@ -179,6 +179,10 @@ export default function AscariDashboard() {
   const [banks, setBanks] = useState([]);
   const [paymentReceipt, setPaymentReceipt] = useState(null); // Makbuz görüntüleme
 
+  // Customer editing
+  const [isEditingCustomer, setIsEditingCustomer] = useState(false);
+  const [editedCustomer, setEditedCustomer] = useState(null);
+
   // Servis
   const [showNewTicketForm, setShowNewTicketForm] = useState(false);
   const [newTicketData, setNewTicketData] = useState({ customer: '', product: '', issue: '', priority: 'medium' });
@@ -976,21 +980,115 @@ export default function AscariDashboard() {
               <div className="w-16 h-16 md:w-20 md:h-20 bg-slate-100 rounded-full mx-auto flex items-center justify-center text-xl md:text-2xl font-bold text-slate-500 mb-4">
                 {selectedCustomer.name.charAt(0)}
               </div>
-              <h2 className="font-bold text-base md:text-lg">{selectedCustomer.name}</h2>
-              <div className="mt-4 text-sm text-left space-y-2">
-                <div className="flex items-center break-all">
-                  <Mail className="w-4 h-4 mr-2 text-slate-400 flex-shrink-0" />
-                  <span className="text-xs md:text-sm">{selectedCustomer.email}</span>
-                </div>
-                <div className="flex items-center">
-                  <Phone className="w-4 h-4 mr-2 text-slate-400 flex-shrink-0" />
-                  <span className="text-xs md:text-sm">{selectedCustomer.phone}</span>
-                </div>
-              </div>
-              <div className="mt-6 pt-4 border-t text-xl md:text-2xl font-bold text-slate-800">
-                {formatCurrency(selectedCustomer.balance)}
-              </div>
-              <div className="text-xs text-slate-500">Bakiye</div>
+
+              {!isEditingCustomer ? (
+                <>
+                  <h2 className="font-bold text-base md:text-lg">{selectedCustomer.name}</h2>
+                  <div className="mt-4 text-sm text-left space-y-2">
+                    <div className="flex items-center break-all">
+                      <Mail className="w-4 h-4 mr-2 text-slate-400 flex-shrink-0" />
+                      <span className="text-xs md:text-sm">{selectedCustomer.email}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <Phone className="w-4 h-4 mr-2 text-slate-400 flex-shrink-0" />
+                      <span className="text-xs md:text-sm">{selectedCustomer.phone || 'Telefon yok'}</span>
+                    </div>
+                    <div className="flex items-start">
+                      <MapPin className="w-4 h-4 mr-2 text-slate-400 flex-shrink-0 mt-0.5" />
+                      <span className="text-xs md:text-sm">{selectedCustomer.street || 'Adres bilgisi yok'}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-t pt-3 mt-3">
+                      <span className="text-xs text-slate-500">Bakiye</span>
+                      <span className="font-bold text-lg">{formatCurrency(selectedCustomer.balance)}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setIsEditingCustomer(true);
+                      setEditedCustomer({
+                        name: selectedCustomer.name,
+                        email: selectedCustomer.email,
+                        phone: selectedCustomer.phone || '',
+                        street: selectedCustomer.street || ''
+                      });
+                    }}
+                    className="mt-4 w-full bg-indigo-600 text-white p-2 rounded-lg text-sm touch-target hover:bg-indigo-700"
+                  >
+                    Bilgileri Düzenle
+                  </button>
+                </>
+              ) : (
+                <>
+                  <h3 className="font-bold text-base mb-4">Müşteri Bilgilerini Düzenle</h3>
+                  <div className="space-y-3 text-left">
+                    <div>
+                      <label className="text-xs text-slate-600 block mb-1">Ad Soyad</label>
+                      <input
+                        type="text"
+                        className="w-full border-2 p-2 rounded-lg text-sm"
+                        value={editedCustomer?.name || ''}
+                        onChange={e => setEditedCustomer({ ...editedCustomer, name: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-600 block mb-1">E-posta</label>
+                      <input
+                        type="email"
+                        className="w-full border-2 p-2 rounded-lg text-sm"
+                        value={editedCustomer?.email || ''}
+                        onChange={e => setEditedCustomer({ ...editedCustomer, email: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-600 block mb-1">Telefon</label>
+                      <input
+                        type="tel"
+                        className="w-full border-2 p-2 rounded-lg text-sm"
+                        value={editedCustomer?.phone || ''}
+                        onChange={e => setEditedCustomer({ ...editedCustomer, phone: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-600 block mb-1">Adres</label>
+                      <textarea
+                        className="w-full border-2 p-2 rounded-lg text-sm resize-none"
+                        rows="3"
+                        value={editedCustomer?.street || ''}
+                        onChange={e => setEditedCustomer({ ...editedCustomer, street: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-4">
+                    <button
+                      onClick={() => setIsEditingCustomer(false)}
+                      className="flex-1 bg-slate-200 text-slate-700 p-2 rounded-lg text-sm touch-target"
+                    >
+                      İptal
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          setLoadingData(true);
+                          // Backend API call placeholder - will be implemented
+                          console.log('Updating customer:', editedCustomer);
+
+                          // Update local state
+                          setSelectedCustomer({ ...selectedCustomer, ...editedCustomer });
+                          setIsEditingCustomer(false);
+                          setLoadingData(false);
+                          alert('Müşteri bilgileri güncellendi!');
+                        } catch (error) {
+                          setLoadingData(false);
+                          alert('Güncelleme başarısız: ' + error.message);
+                        }
+                      }}
+                      className="flex-1 bg-indigo-600 text-white p-2 rounded-lg text-sm touch-target hover:bg-indigo-700"
+                    >
+                      Kaydet
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Customer Detail Tabs */}
