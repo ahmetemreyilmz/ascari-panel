@@ -336,14 +336,21 @@ def customer_details(partner_id):
         except:
             pass
         
-        # Ödemeler
-        payments = []
+        # Ödemeler - Tahsilat ve Ödeme olarak ayır
+        inbound_payments = []
+        outbound_payments = []
         try:
             payment_raw = models.execute_kw(db, uid, pwd, 'account.payment', 'search_read',
                 [[['partner_id', '=', partner_id]]],
-                {'fields': ['id', 'name', 'amount', 'date', 'state', 'payment_type'],
-                 'order': 'date desc', 'limit': 50})
-            payments = payment_raw
+                {'fields': ['id', 'name', 'amount', 'date', 'state', 'payment_type', 'journal_id'],
+                 'order': 'date desc', 'limit': 100})
+            
+            # Payment_type'a göre ayır
+            for p in payment_raw:
+                if p.get('payment_type') == 'inbound':
+                    inbound_payments.append(p)
+                elif p.get('payment_type') == 'outbound':
+                    outbound_payments.append(p)
         except:
             pass
         
@@ -352,7 +359,8 @@ def customer_details(partner_id):
             'orders': orders,
             'invoices': invoices,
             'tickets': tickets,
-            'payments': payments
+            'inbound_payments': inbound_payments,  # Tahsilatlar
+            'outbound_payments': outbound_payments  # Ödemeler
         })
         
     except Exception as e:

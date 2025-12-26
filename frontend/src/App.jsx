@@ -280,14 +280,23 @@ export default function AscariDashboard() {
     // Fetch real payments from API
     try {
       const res = await apiCall(`customer-details/${customerId}`, {});
-      if (res && res.status === 'success' && res.payments) {
-        setCustomerPayments(res.payments);
+      if (res && res.status === 'success') {
+        // Tahsilatlar (inbound)
+        if (res.inbound_payments) {
+          setCustomerPayments(res.inbound_payments);
+        }
+        // Ödemeler (outbound)
+        if (res.outbound_payments) {
+          setCustomerOutboundPayments(res.outbound_payments);
+        }
       } else {
         setCustomerPayments([]);
+        setCustomerOutboundPayments([]);
       }
     } catch (error) {
       console.error('Tahsilat verisi çekilemedi:', error);
       setCustomerPayments([]);
+      setCustomerOutboundPayments([]);
     }
   }, [data, selectedCustomer]);
 

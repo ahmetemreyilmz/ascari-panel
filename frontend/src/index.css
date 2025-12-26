@@ -8,12 +8,21 @@ body {
 }
 
 @layer utilities {
-  .scrollbar-hide::-webkit-scrollbar { display: none; }
-  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
   /* Touch-friendly targets */
-  .touch-target { min-height: 44px; min-width: 44px; }
-  
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
   /* Mobile drawer animations */
   .drawer-overlay {
     position: fixed;
@@ -21,53 +30,72 @@ body {
     background: rgba(0, 0, 0, 0.5);
     z-index: 40;
   }
-  
+
   .drawer-enter {
     transform: translateX(-100%);
   }
-  
+
   .drawer-enter-active {
     transform: translateX(0);
     transition: transform 0.3s ease-out;
   }
-  
+
   .drawer-exit {
     transform: translateX(0);
   }
-  
+
   .drawer-exit-active {
     transform: translateX(-100%);
     transition: transform 0.3s ease-in;
   }
-  
+
   /* Hamburger menu animation */
   .hamburger-line {
     transition: all 0.3s ease;
     transform-origin: center;
   }
-  
+
   .hamburger-open .hamburger-line:nth-child(1) {
     transform: translateY(8px) rotate(45deg);
   }
-  
+
   .hamburger-open .hamburger-line:nth-child(2) {
     opacity: 0;
   }
-  
+
   .hamburger-open .hamburger-line:nth-child(3) {
     transform: translateY(-8px) rotate(-45deg);
   }
 }
 
 /* Fade in animation */
-.animate-fadeIn { animation: fadeIn 0.3s ease-in-out; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
 /* Progress bar animation */
 @keyframes progress {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
 }
+
 .animate-progress {
   animation: progress 1.5s ease-in-out infinite;
 }
@@ -96,9 +124,24 @@ body {
 }
 
 @media print {
-  .no-print { display: none !important; }
-  .print-only { display: block !important; }
-  body { background: white; }
-  @page { margin: 0; size: auto; }
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  body {
+    background: white;
+  }
+
+  @page {
+    size: A4;
+    margin: 2cm;
+  }
 }
-.print-only { display: none; }
+
+.print-only {
+  display: none;
+}
