@@ -477,9 +477,8 @@ export default function AscariDashboard() {
     <div className="flex h-screen bg-slate-50 font-sans">
       {renderProductModal()}
       <div className="w-20 lg:w-64 bg-slate-900 text-white flex flex-col transition-all duration-300 no-print">
-        <div className="p-6 font-bold text-2xl hidden lg:flex items-center gap-3">
-          <img src="/logo.png" className="h-8 brightness-200" onError={(e) => e.target.style.display = 'none'} alt="Ascari" />
-          <span className="tracking-widest">ASCARI</span>
+        <div className="p-6 hidden lg:flex justify-center">
+          <img src="/logo.png" className="h-10 brightness-200" onError={(e) => e.target.style.display = 'none'} alt="Ascari" />
         </div>
         <div className="lg:hidden p-4 flex justify-center">
           <img src="/logo.png" className="h-8 brightness-200" onError={(e) => e.target.style.display = 'none'} alt="Ascari" />
