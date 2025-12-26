@@ -160,6 +160,7 @@ export default function AscariDashboard() {
   const [tempCustomerName, setTempCustomerName] = useState('');
   const [tempCustomerPhone, setTempCustomerPhone] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [applyDiscount, setApplyDiscount] = useState(true); // Nakit/Tek çekim indirimi
 
   // CRM Data
   const [customerOrders, setCustomerOrders] = useState([]);
@@ -343,6 +344,7 @@ export default function AscariDashboard() {
 
   const createQuickOffer = async () => {
     const total = quickCart.reduce((sum, i) => sum + (i.list_price * i.qty), 0);
+    const discountedTotal = applyDiscount ? total / 1.15 : total;
     const quote_code = 'ASC-' + Date.now().toString().slice(-6) + Math.floor(100 + Math.random() * 900);
 
     const offerData = {
@@ -351,7 +353,10 @@ export default function AscariDashboard() {
       phone: tempCustomerPhone || '',
       date: new Date().toLocaleDateString('tr-TR'),
       items: [...quickCart],
-      total, tax: total * 0.2, grandTotal: total * 1.2
+      total,
+      discountedTotal,
+      hasDiscount: applyDiscount,
+      grandTotal: total
     };
 
     // Önce UI'da göster
@@ -411,7 +416,7 @@ export default function AscariDashboard() {
                 <tbody>{quickOfferDetails.items.map((i, k) => <tr key={k} className="border-b"><td className="py-3"><div className="font-bold">{i.name}</div><div className="text-xs text-gray-500">{i.default_code}</div></td><td className="text-right">{i.qty}</td><td className="text-right hidden sm:table-cell">{formatCurrency(i.list_price)}</td><td className="text-right font-bold">{formatCurrency(i.list_price * i.qty)}</td></tr>)}</tbody>
               </table>
             </div>
-            <div className="flex justify-end"><div className="w-full md:w-1/2 text-right"><div className="flex justify-between border-t pt-2 text-lg md:text-xl font-bold"><span>GENEL TOPLAM:</span><span>{formatCurrency(quickOfferDetails.grandTotal)}</span></div></div></div>
+            <div className="flex justify-end"><div className="w-full md:w-1/2 text-right space-y-2"><div className="flex justify-between border-t pt-2 text-base"><span>Kredi Kartı 6 Taksit:</span><span className="font-bold">{formatCurrency(quickOfferDetails.grandTotal)}</span></div>{quickOfferDetails.hasDiscount && <div className="flex justify-between border-t pt-2 text-lg md:text-xl font-bold text-green-700"><span>Nakit/Tek Çekim:</span><span>{formatCurrency(quickOfferDetails.discountedTotal)}</span></div>}</div></div>
             <div className="mt-10 text-center print-only"><div className="flex justify-center mb-2"><QRCode value={`https://ascari.com.tr/teklif-sorgula?code=${quickOfferDetails.code}`} size={80} /></div><p className="text-xs text-gray-400">Teklifinizi sorgulamak için QR kodu okutun</p><p className="text-xs text-gray-500 font-mono mt-1">{quickOfferDetails.code}</p></div>
           </div>
         </div>
@@ -444,7 +449,21 @@ export default function AscariDashboard() {
             <div className="p-4 bg-slate-900 text-white font-bold rounded-t-xl flex justify-between"><span>Sepet</span><span className="bg-indigo-500 px-2 rounded text-xs py-1">{quickCart.length}</span></div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3">{quickCart.map(i => <div key={i.id} className="flex justify-between items-center border-b pb-3 gap-2"><div className="flex-1 pr-2"><div className="text-sm font-medium truncate">{i.name}</div><div className="text-xs text-slate-400">{formatCurrency(i.list_price)}</div></div><div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1 touch-manipulation"><button onClick={() => setQuickCart(prev => prev.map(x => x.id === i.id ? { ...x, qty: Math.max(1, x.qty - 1) } : x))} className="px-3 py-2 hover:bg-slate-200 rounded active:scale-95 transition-transform text-lg font-bold touch-target">-</button><span className="text-base font-bold min-w-[2rem] text-center">{i.qty}</span><button onClick={() => addToCart(i)} className="px-3 py-2 hover:bg-slate-200 rounded active:scale-95 transition-transform text-lg font-bold touch-target">+</button></div><button onClick={() => setQuickCart(prev => prev.filter(x => x.id !== i.id))} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded touch-manipulation active:scale-95 transition-transform touch-target"><Trash2 className="w-5 h-5" /></button></div>)}</div>
             <div className="p-4 border-t bg-slate-50 rounded-b-xl space-y-3">
-              <div className="flex justify-between font-bold text-lg"><span>Toplam</span><span>{formatCurrency(quickCart.reduce((a, b) => a + (b.list_price * b.qty), 0))}</span></div>
+              <div className="flex items-center justify-between mb-2 p-2 bg-white rounded border">
+                <span className="text-sm font-medium">Nakit/Tek Çekim İndirimi</span>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" checked={applyDiscount} onChange={e => setApplyDiscount(e.target.checked)} className="sr-only peer" />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                </label>
+              </div>
+              {applyDiscount ? (
+                <>
+                  <div className="flex justify-between text-sm text-slate-600"><span>6 Taksit Fiyatı:</span><span className="line-through">{formatCurrency(quickCart.reduce((a, b) => a + (b.list_price * b.qty), 0))}</span></div>
+                  <div className="flex justify-between font-bold text-lg text-green-700"><span>Nakit/Tek Çekim:</span><span>{formatCurrency(quickCart.reduce((a, b) => a + (b.list_price * b.qty), 0) / 1.15)}</span></div>
+                </>
+              ) : (
+                <div className="flex justify-between font-bold text-lg"><span>Toplam</span><span>{formatCurrency(quickCart.reduce((a, b) => a + (b.list_price * b.qty), 0))}</span></div>
+              )}
               <input className="w-full border-2 p-3 rounded-lg text-base touch-target" placeholder="Müşteri Adı (Opsiyonel)" value={tempCustomerName} onChange={e => setTempCustomerName(e.target.value)} />
               <input className="w-full border-2 p-3 rounded-lg text-base touch-target" placeholder="Telefon (Opsiyonel)" value={tempCustomerPhone} onChange={e => setTempCustomerPhone(e.target.value)} />
               <button onClick={createQuickOffer} disabled={quickCart.length === 0} className="w-full bg-indigo-600 text-white py-4 rounded-lg font-bold text-lg disabled:opacity-50 hover:bg-indigo-700 active:scale-98 transition-transform touch-target">Teklif Oluştur</button>
@@ -471,13 +490,20 @@ export default function AscariDashboard() {
       : tickets;
 
     if (selectedTicket) {
+      // HTML decode helper
+      const decodeHTML = (html) => {
+        const txt = document.createElement('textarea');
+        txt.innerHTML = html;
+        return txt.value.replace(/<[^>]*>/g, ''); // Strip HTML tags
+      };
+
       return (
         <div className="space-y-4 md:space-y-6 animate-fadeIn">
           <button onClick={() => setSelectedTicket(null)} className="text-slate-500 flex items-center mb-4 touch-target">
             <ArrowLeft className="mr-2 w-4 h-4" /> Listeye Dön
           </button>
           <div className="bg-white shadow rounded-lg p-4 md:p-6 border border-slate-200">
-            <h2 className="text-xl md:text-2xl font-bold mb-1">{selectedTicket.issue}</h2>
+            <h2 className="text-xl md:text-2xl font-bold mb-1">{selectedTicket.product}</h2>
             <p className="text-sm text-slate-500 mb-4 md:mb-6">#{selectedTicket.id}</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-4 md:mb-6">
               <div className="p-4 bg-slate-50 rounded border">
@@ -489,6 +515,12 @@ export default function AscariDashboard() {
                 <p>{selectedTicket.product}</p>
               </div>
             </div>
+            {selectedTicket.issue && (
+              <div className="p-4 bg-blue-50 rounded border mb-4">
+                <h4 className="font-bold text-xs uppercase text-slate-400 mb-2">Sorun Açıklaması</h4>
+                <p className="whitespace-pre-wrap text-slate-700">{decodeHTML(selectedTicket.issue)}</p>
+              </div>
+            )}
             <div className="border-t pt-4 space-y-4">
               <div>
                 <span className="font-bold block mb-2">Durum Güncelle:</span>
