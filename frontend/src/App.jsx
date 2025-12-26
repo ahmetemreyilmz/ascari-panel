@@ -486,7 +486,7 @@ export default function AscariDashboard() {
   const createQuickOffer = async () => {
     const total = quickCart.reduce((sum, i) => sum + (i.list_price * i.qty), 0);
     const discountedTotal = applyDiscount ? total / 1.15 : total;
-    const quote_code = 'ASC-' + Date.now().toString().slice(-6) + Math.floor(100 + Math.random() * 900);
+    const quote_code = 'ASC-' + Math.floor(1000 + Math.random() * 9000); // 4 haneli (1000-9999)
 
     const offerData = {
       code: quote_code,
