@@ -183,6 +183,11 @@ export default function AscariDashboard() {
   const [isEditingCustomer, setIsEditingCustomer] = useState(false);
   const [editedCustomer, setEditedCustomer] = useState(null);
 
+  // Masraflar (Expenses)
+  const [expenses, setExpenses] = useState([]);
+  const [newExpense, setNewExpense] = useState({ category: '', amount: '', date: '', description: '' });
+  const [expenseCategories] = useState(['Ofis', 'Proje', 'Pazarlama', 'Taşıma', 'Diğer']);
+
   // Servis
   const [showNewTicketForm, setShowNewTicketForm] = useState(false);
   const [newTicketData, setNewTicketData] = useState({ customer: '', product: '', issue: '', priority: 'medium' });
