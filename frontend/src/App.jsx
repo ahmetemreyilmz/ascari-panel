@@ -273,8 +273,18 @@ export default function AscariDashboard() {
     const tickets = (data.tickets || []).filter(t => t.customer === selectedCustomer?.name);
     setCustomerTickets(tickets);
 
-    // Mock payments data
-    setCustomerPayments([]);
+    // Fetch real payments from API
+    try {
+      const res = await apiCall(`customer-details/${customerId}`, {});
+      if (res && res.status === 'success' && res.payments) {
+        setCustomerPayments(res.payments);
+      } else {
+        setCustomerPayments([]);
+      }
+    } catch (error) {
+      console.error('Tahsilat verisi çekilemedi:', error);
+      setCustomerPayments([]);
+    }
   }, [data, selectedCustomer]);
 
   useEffect(() => {
@@ -1110,7 +1120,7 @@ export default function AscariDashboard() {
                         disabled={!newPayment.amount || !newPayment.date || !newPayment.journal_id}
                         className="w-full mt-3 bg-indigo-600 text-white p-3 rounded-lg font-medium touch-target disabled:opacity-50 hover:bg-indigo-700"
                       >
-                        Ödeme Kaydet
+                        Tahsilat Kaydet
                       </button>
                       {(!cashRegisters.length && !banks.length) && (
                         <div className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded">
@@ -1121,7 +1131,7 @@ export default function AscariDashboard() {
 
                     {/* Payment History */}
                     <div>
-                      <h3 className="font-bold mb-3 text-sm md:text-base">Ödeme Geçmişi</h3>
+                      <h3 className="font-bold mb-3 text-sm md:text-base">Tahsilat Geçmişi</h3>
                       {customerPayments.length > 0 ? (
                         <div className="space-y-2">
                           {customerPayments.map(p => (
@@ -1136,7 +1146,7 @@ export default function AscariDashboard() {
                           ))}
                         </div>
                       ) : (
-                        <div className="text-center text-slate-500 py-10">Ödeme kaydı bulunamadı</div>
+                        <div className="text-center text-slate-500 py-10">Tahsilat kaydı bulunamadı</div>
                       )}
                     </div>
                   </div>
