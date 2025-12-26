@@ -168,11 +168,12 @@ export default function AscariDashboard() {
   const [customerQuotes, setCustomerQuotes] = useState([]);
   const [customerTickets, setCustomerTickets] = useState([]);
   const [customerPayments, setCustomerPayments] = useState([]);
-  const [newPayment, setNewPayment] = useState({ amount: '', date: '', method: 'cash', note: '', journal_id: '', installments: 1 });
+  const [newPayment, setNewPayment] = useState({ amount: '', date: '', method: 'cash', note: '', journal_id: '', installments: 1, currency: 'TRY' });
 
   // Payment Journals (Kasa, Banka)
   const [cashRegisters, setCashRegisters] = useState([]);
   const [banks, setBanks] = useState([]);
+  const [paymentReceipt, setPaymentReceipt] = useState(null); // Makbuz görüntüleme
 
   // Servis
   const [showNewTicketForm, setShowNewTicketForm] = useState(false);
@@ -296,40 +297,74 @@ export default function AscariDashboard() {
   };
 
   const savePayment = async () => {
+    console.log('savePayment başlatıldı', { newPayment, selectedCustomer });
+
     if (!newPayment.amount || !newPayment.date || !newPayment.journal_id) {
-      alert('Lütfen tüm alanları doldurun');
+      alert('Lütfen tüm alanları doldurun (Tutar, Tarih, Kasa/Banka)');
+      console.error('Eksik alan:', { amount: newPayment.amount, date: newPayment.date, journal_id: newPayment.journal_id });
       return;
     }
 
-    setLoadingData(true);
-    const res = await apiCall('register-payment', {
-      partner_id: selectedCustomer.id,
-      amount: parseFloat(newPayment.amount),
-      date: newPayment.date,
-      journal_id: parseInt(newPayment.journal_id),
-      payment_method: newPayment.method,
-      installments: parseInt(newPayment.installments) || 1,
-      payment_type: 'inbound',
-      note: newPayment.note || ''
-    });
-    setLoadingData(false);
+    try {
+      setLoadingData(true);
+      console.log('API çağrısı yapılıyor...');
 
-    if (res && res.status === 'success') {
-      // Add to local state
-      const payment = {
-        id: res.payment_id,
-        amount: newPayment.amount,
+      const res = await apiCall('register-payment', {
+        partner_id: selectedCustomer.id,
+        amount: parseFloat(newPayment.amount),
         date: newPayment.date,
-        method: newPayment.method,
-        note: newPayment.note,
-        installments: newPayment.installments,
-        timestamp: new Date().toISOString()
-      };
-      setCustomerPayments(prev => [payment, ...prev]);
-      setNewPayment({ amount: '', date: '', method: 'cash', note: '', journal_id: cashRegisters[0]?.id || '', installments: 1 });
-      alert('Ödeme başarıyla kaydedildi!');
-    } else {
-      alert('Ödeme kaydedilemedi: ' + (res?.message || 'Bilinmeyen hata'));
+        journal_id: parseInt(newPayment.journal_id),
+        payment_method: newPayment.method,
+        installments: parseInt(newPayment.installments) || 1,
+        payment_type: 'inbound',
+        note: newPayment.note || ''
+      });
+
+      console.log('API yanıtı:', res);
+      setLoadingData(false);
+
+      if (res && res.status === 'success') {
+        // Makbuz verisini hazırla
+        const receipt = {
+          receiptNo: 'MKB-' + Date.now().toString().slice(-8),
+          customer: selectedCustomer.name,
+          amount: newPayment.amount,
+          date: newPayment.date,
+          method: newPayment.method,
+          methodLabel: newPayment.method === 'cash' ? 'Nakit' : newPayment.method === 'card' ? 'Kredi Kartı' : 'Havale/EFT',
+          installments: newPayment.installments,
+          journal: newPayment.method === 'cash'
+            ? cashRegisters.find(c => c.id === newPayment.journal_id)?.name
+            : banks.find(b => b.id === newPayment.journal_id)?.name,
+          note: newPayment.note,
+          timestamp: new Date().toLocaleString('tr-TR')
+        };
+
+        // Makbuzu göster
+        setPaymentReceipt(receipt);
+
+        // Add to local state
+        const payment = {
+          id: res.payment_id,
+          amount: newPayment.amount,
+          date: newPayment.date,
+          method: newPayment.method,
+          note: newPayment.note,
+          installments: newPayment.installments,
+          timestamp: new Date().toISOString()
+        };
+        setCustomerPayments(prev => [payment, ...prev]);
+        setNewPayment({ amount: '', date: '', method: 'cash', note: '', journal_id: cashRegisters[0]?.id || '', installments: 1 });
+
+        console.log('Ödeme başarıyla kaydedildi, makbuz gösteriliyor');
+      } else {
+        alert('Ödeme kaydedilemedi: ' + (res?.message || 'Bilinmeyen hata'));
+        console.error('API hatası:', res);
+      }
+    } catch (error) {
+      setLoadingData(false);
+      alert('Ödeme kaydedilirken hata oluştu: ' + error.message);
+      console.error('savePayment hatası:', error);
     }
   };
 
@@ -762,8 +797,81 @@ export default function AscariDashboard() {
   const renderCustomers = () => {
     if (selectedCustomer) {
       return (
-        <div className="space-y-4 md:space-y-6 animate-fadeIn no-print">
-          <button onClick={() => setSelectedCustomer(null)} className="flex items-center text-slate-500 touch-target">
+        <div className="space-y-4 md:space-y-6 animate-fadeIn">
+          {/* Payment Receipt Modal */}
+          {paymentReceipt && (
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-auto">
+                <div className="flex justify-between mb-4 no-print">
+                  <h2 className="text-xl font-bold">Ödeme Makbuzu</h2>
+                  <button onClick={() => setPaymentReceipt(null)} className="touch-target"><X className="w-6 h-6" /></button>
+                </div>
+                <div className="border-2 border-slate-200 p-6 md:p-8">
+                  <div className="text-center mb-6 border-b-2 border-black pb-4">
+                    <h1 className="text-2xl md:text-3xl font-bold">ASCARI</h1>
+                    <p className="text-gray-500">Mobilya & Tasarım</p>
+                    <div className="mt-4">
+                      <h3 className="text-lg font-bold text-gray-600">ÖDEME MAKBUZU</h3>
+                      <p className="text-sm text-gray-500">#{paymentReceipt.receiptNo}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-4 mb-6">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <h4 className="text-xs uppercase text-gray-400 font-bold">Müşteri</h4>
+                        <p className="font-bold">{paymentReceipt.customer}</p>
+                      </div>
+                      <div className="text-right">
+                        <h4 className="text-xs uppercase text-gray-400 font-bold">Tarih</h4>
+                        <p className="font-bold">{paymentReceipt.date}</p>
+                      </div>
+                    </div>
+                    <div className="border-t pt-4">
+                      <div className="flex justify-between mb-2">
+                        <span className="text-gray-600">Ödeme Yöntemi:</span>
+                        <span className="font-bold">{paymentReceipt.methodLabel}</span>
+                      </div>
+                      {paymentReceipt.method === 'card' && paymentReceipt.installments > 1 && (
+                        <div className="flex justify-between mb-2">
+                          <span className="text-gray-600">Taksit:</span>
+                          <span className="font-bold">{paymentReceipt.installments} Taksit</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between mb-2">
+                        <span className="text-gray-600">{paymentReceipt.method === 'cash' ? 'Kasa' : 'Banka'}:</span>
+                        <span className="font-bold">{paymentReceipt.journal || '-'}</span>
+                      </div>
+                      {paymentReceipt.note && (
+                        <div className="flex justify-between mb-2">
+                          <span className="text-gray-600">Not:</span>
+                          <span>{paymentReceipt.note}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="border-t-2 border-black pt-4 mt-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xl font-bold">TOPLAM:</span>
+                        <span className="text-2xl font-bold text-green-700">{formatCurrency(paymentReceipt.amount)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-center text-xs text-gray-400 border-t pt-4">
+                    <p>{paymentReceipt.timestamp}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-4 no-print">
+                  <button onClick={() => window.print()} className="flex-1 bg-indigo-600 text-white p-3 rounded-lg font-medium touch-target flex items-center justify-center">
+                    <Printer className="w-5 h-5 mr-2" /> Yazdır
+                  </button>
+                  <button onClick={() => setPaymentReceipt(null)} className="flex-1 bg-slate-200 text-slate-700 p-3 rounded-lg font-medium touch-target">
+                    Kapat
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <button onClick={() => setSelectedCustomer(null)} className="flex items-center text-slate-500 touch-target no-print">
             <ArrowLeft className="w-4 h-4 mr-2" /> Listeye Dön
           </button>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
@@ -797,11 +905,11 @@ export default function AscariDashboard() {
                 <button onClick={() => setCustomerDetailTab('invoices')} className={`flex-1 min-w-[100px] py-3 px-2 text-sm md:text-base whitespace-nowrap ${customerDetailTab === 'invoices' ? 'border-b-2 border-indigo-600 font-bold text-indigo-600' : 'text-slate-600'}`}>Faturalar</button>
                 <button onClick={() => setCustomerDetailTab('quotes')} className={`flex-1 min-w-[100px] py-3 px-2 text-sm md:text-base whitespace-nowrap ${customerDetailTab === 'quotes' ? 'border-b-2 border-indigo-600 font-bold text-indigo-600' : 'text-slate-600'}`}>Teklifler</button>
                 <button onClick={() => setCustomerDetailTab('tickets')} className={`flex-1 min-w-[100px] py-3 px-2 text-sm md:text-base whitespace-nowrap ${customerDetailTab === 'tickets' ? 'border-b-2 border-indigo-600 font-bold text-indigo-600' : 'text-slate-600'}`}>Teknik Servis</button>
-                <button onClick={() => setCustomerDetailTab('payments')} className={`flex-1 min-w-[100px] py-3 px-2 text-sm md:text-base whitespace-nowrap ${customerDetailTab === 'payments' ? 'border-b-2 border-indigo-600 font-bold text-indigo-600' : 'text-slate-600'}`}>Ödemeler</button>
+                <button onClick={() => setCustomerDetailTab('payments')} className={`flex-1 min-w-[100px] py-3 px-2 text-sm md:text-base whitespace-nowrap ${customerDetailTab === 'payments' ? 'border-b-2 border-green-600 font-bold text-green-600' : 'text-slate-600'}`}>Tahsilatlar</button>
               </div>
 
               {/* Tab Content */}
-              <div className="p-4 max-h-[400px] md:max-h-[500px] overflow-y-auto">
+              <div className="p-4 max-h-[600px] overflow-y-auto">
                 {customerDetailTab === 'orders' && (
                   <div>
                     {customerOrders.length > 0 ? (
@@ -889,7 +997,7 @@ export default function AscariDashboard() {
                   <div className="space-y-4">
                     {/* Advanced Payment Form */}
                     <div className="border-2 border-indigo-200 rounded-lg p-4 bg-indigo-50">
-                      <h3 className="font-bold mb-4 text-sm md:text-base">Yeni Ödeme Kaydet</h3>
+                      <h3 className="font-bold mb-4 text-sm md:text-base">Yeni Tahsilat Kaydet</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <input
                           type="number"
@@ -976,6 +1084,18 @@ export default function AscariDashboard() {
                             ))}
                           </select>
                         )}
+
+                        {/* Döviz Seçimi */}
+                        <select
+                          className="border-2 p-3 rounded-lg touch-target bg-slate-50"
+                          value={newPayment.currency}
+                          onChange={e => setNewPayment({ ...newPayment, currency: e.target.value })}
+                        >
+                          <option value="TRY">₺ Türk Lirası</option>
+                          <option value="USD">$ Amerikan Doları</option>
+                          <option value="EUR">€ Euro</option>
+                          <option value="GBP">£ İngiliz Sterlini</option>
+                        </select>
 
                         <input
                           type="text"
