@@ -7,7 +7,7 @@ import {
   Package, FileText, Code, Printer, Search, Zap, Plus, Minus, Trash2,
   User, Wrench, CreditCard, Phone, Mail, MapPin, Calendar, Edit3, Save,
   CheckCircle, AlertCircle, Info, ChevronDown, ChevronRight, Layers, X,
-  ArrowLeft, ArrowUpRight, ArrowDownLeft
+  ArrowLeft, ArrowUpRight, ArrowDownLeft, Menu, Clock, CheckSquare, AlertTriangle
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 
@@ -109,14 +109,18 @@ export default function AscariDashboard() {
   const [rememberMe, setRememberMe] = useState(false);
   const [logoError, setLogoError] = useState(false);
 
+  // Mobile
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   // Filtreler
   const [salesFilter, setSalesFilter] = useState('all');
   const [productSearch, setProductSearch] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [customerBalanceFilter, setCustomerBalanceFilter] = useState('all');
   const [invoiceSearch, setInvoiceSearch] = useState('');
-  const [customerSearch, setCustomerSearch] = useState(''); // EKSİK STATE EKLENDİ
+  const [customerSearch, setCustomerSearch] = useState('');
   const [accountingSubTab, setAccountingSubTab] = useState('customer_invoices');
+  const [ticketSearch, setTicketSearch] = useState('');
 
   // Seçimler & Detaylar
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -126,13 +130,22 @@ export default function AscariDashboard() {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [customerDetailTab, setCustomerDetailTab] = useState('orders');
+  const [ticketNotes, setTicketNotes] = useState('');
 
   // Hızlı Teklif
   const [quickCart, setQuickCart] = useState([]);
   const [quickOfferDetails, setQuickOfferDetails] = useState(null);
   const [tempCustomerName, setTempCustomerName] = useState('');
   const [tempCustomerPhone, setTempCustomerPhone] = useState('');
-  const [searchTerm, setSearchTerm] = useState(''); // Satış Araması
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // CRM Data
+  const [customerOrders, setCustomerOrders] = useState([]);
+  const [customerInvoices, setCustomerInvoices] = useState([]);
+  const [customerQuotes, setCustomerQuotes] = useState([]);
+  const [customerTickets, setCustomerTickets] = useState([]);
+  const [customerPayments, setCustomerPayments] = useState([]);
+  const [newPayment, setNewPayment] = useState({ amount: '', date: '', method: 'cash', note: '' });
 
   // Servis
   const [showNewTicketForm, setShowNewTicketForm] = useState(false);
@@ -207,6 +220,52 @@ export default function AscariDashboard() {
     setSelectedTicket(prev => ({ ...prev, status: newStatus }));
   };
 
+  const addTicketNote = async (ticketId, note) => {
+    // In real implementation, this would call API
+    console.log('Adding note to ticket:', ticketId, note);
+    // For now, just clear the note field
+    setTicketNotes('');
+  };
+
+  // Fetch customer-specific data
+  const fetchCustomerData = useCallback(async (customerId) => {
+    // Filter orders for this customer
+    const orders = (data.orders || []).filter(o => o.customer === selectedCustomer?.name);
+    setCustomerOrders(orders);
+
+    // Filter invoices
+    const invoices = (data.invoices || []).filter(i => i.partner === selectedCustomer?.name);
+    setCustomerInvoices(invoices);
+
+    // Filter quotes (draft orders)
+    const quotes = orders.filter(o => o.status === 'draft');
+    setCustomerQuotes(quotes);
+
+    // Filter tickets
+    const tickets = (data.tickets || []).filter(t => t.customer === selectedCustomer?.name);
+    setCustomerTickets(tickets);
+
+    // Mock payments data
+    setCustomerPayments([]);
+  }, [data, selectedCustomer]);
+
+  useEffect(() => {
+    if (selectedCustomer) {
+      fetchCustomerData(selectedCustomer.id);
+    }
+  }, [selectedCustomer, fetchCustomerData]);
+
+  const savePayment = () => {
+    const payment = {
+      id: Date.now(),
+      ...newPayment,
+      customer: selectedCustomer?.name,
+      timestamp: new Date().toISOString()
+    };
+    setCustomerPayments(prev => [payment, ...prev]);
+    setNewPayment({ amount: '', date: '', method: 'cash', note: '' });
+  };
+
   // Sepet İşlemleri
   const addToCart = useCallback((product) => {
     setQuickCart(prev => {
@@ -260,9 +319,7 @@ export default function AscariDashboard() {
 
   const handleLogout = () => { setIsConnected(false); setActiveTab('dashboard'); setData(INITIAL_DATA); };
 
-  // --- EKRAN RENDERLARI ---
-
-  // 1. HIZLI TEKLİF & ÜRÜN LİSTESİ
+  // 1. HIZLI TEKLİF & ÜRÜN LİSTESİ - Responsive
   const renderProductGrid = (isOfferMode) => {
     const filtered = data.products.filter(p => {
       const catMatch = !selectedCategoryId || (p.categ_path && p.categ_path.includes(String(selectedCategoryId)));
@@ -273,20 +330,22 @@ export default function AscariDashboard() {
       return (
         <div className="flex flex-col h-full animate-fadeIn bg-white overflow-auto">
           <div className="flex justify-between items-center p-4 border-b no-print">
-            <button onClick={() => { setQuickOfferDetails(null); setQuickCart([]); }} className="flex items-center text-slate-500"><ArrowLeft className="w-4 h-4 mr-2" /> Yeni Teklif</button>
-            <button onClick={() => window.print()} className="bg-indigo-600 text-white px-4 py-2 rounded flex items-center"><Printer className="w-4 h-4 mr-2" /> Yazdır</button>
+            <button onClick={() => { setQuickOfferDetails(null); setQuickCart([]); }} className="flex items-center text-slate-500 touch-target"><ArrowLeft className="w-4 h-4 mr-2" /> Yeni Teklif</button>
+            <button onClick={() => window.print()} className="bg-indigo-600 text-white px-4 py-2 rounded flex items-center touch-target"><Printer className="w-4 h-4 mr-2" /> Yazdır</button>
           </div>
-          <div className="p-10 max-w-4xl mx-auto w-full print:p-0 print:w-full">
-            <div className="flex justify-between border-b-2 border-black pb-4 mb-6">
-              <div><h1 className="text-3xl font-bold">ASCARI</h1><p className="text-gray-500">Mobilya & Tasarım</p></div>
-              <div className="text-right"><h2 className="text-xl text-gray-400 font-light">TEKLİF</h2><p className="font-bold">#{quickOfferDetails.code}</p><p>{quickOfferDetails.date}</p></div>
+          <div className="p-4 md:p-10 max-w-4xl mx-auto w-full print:p-0 print:w-full">
+            <div className="flex flex-col md:flex-row justify-between border-b-2 border-black pb-4 mb-6 gap-4">
+              <div><h1 className="text-2xl md:text-3xl font-bold">ASCARI</h1><p className="text-gray-500">Mobilya & Tasarım</p></div>
+              <div className="md:text-right"><h2 className="text-lg md:text-xl text-gray-400 font-light">TEKLİF</h2><p className="font-bold">#{quickOfferDetails.code}</p><p>{quickOfferDetails.date}</p></div>
             </div>
-            <div className="mb-8"><h3 className="text-xs font-bold uppercase text-gray-400">Sayın</h3><p className="text-xl font-bold">{quickOfferDetails.customer}</p><p>{quickOfferDetails.phone}</p></div>
-            <table className="w-full mb-8 text-sm">
-              <thead><tr className="border-b-2 border-gray-200 text-left"><th className="py-2">Ürün</th><th className="text-right">Miktar</th><th className="text-right">Birim Fiyat</th><th className="text-right">Tutar</th></tr></thead>
-              <tbody>{quickOfferDetails.items.map((i, k) => <tr key={k} className="border-b"><td className="py-3"><div className="font-bold">{i.name}</div><div className="text-xs text-gray-500">{i.default_code}</div></td><td className="text-right">{i.qty}</td><td className="text-right">{formatCurrency(i.list_price)}</td><td className="text-right font-bold">{formatCurrency(i.list_price * i.qty)}</td></tr>)}</tbody>
-            </table>
-            <div className="flex justify-end"><div className="w-1/2 text-right"><div className="flex justify-between border-t pt-2 text-xl font-bold"><span>GENEL TOPLAM:</span><span>{formatCurrency(quickOfferDetails.grandTotal)}</span></div></div></div>
+            <div className="mb-8"><h3 className="text-xs font-bold uppercase text-gray-400">Sayın</h3><p className="text-lg md:text-xl font-bold">{quickOfferDetails.customer}</p><p>{quickOfferDetails.phone}</p></div>
+            <div className="overflow-x-auto">
+              <table className="w-full mb-8 text-sm">
+                <thead><tr className="border-b-2 border-gray-200 text-left"><th className="py-2">Ürün</th><th className="text-right">Miktar</th><th className="text-right hidden sm:table-cell">Birim Fiyat</th><th className="text-right">Tutar</th></tr></thead>
+                <tbody>{quickOfferDetails.items.map((i, k) => <tr key={k} className="border-b"><td className="py-3"><div className="font-bold">{i.name}</div><div className="text-xs text-gray-500">{i.default_code}</div></td><td className="text-right">{i.qty}</td><td className="text-right hidden sm:table-cell">{formatCurrency(i.list_price)}</td><td className="text-right font-bold">{formatCurrency(i.list_price * i.qty)}</td></tr>)}</tbody>
+              </table>
+            </div>
+            <div className="flex justify-end"><div className="w-full md:w-1/2 text-right"><div className="flex justify-between border-t pt-2 text-lg md:text-xl font-bold"><span>GENEL TOPLAM:</span><span>{formatCurrency(quickOfferDetails.grandTotal)}</span></div></div></div>
             <div className="mt-10 text-center print-only"><div className="flex justify-center mb-2"><QRCode value={`https://ascari.com.tr/teklif-sorgula?code=${quickOfferDetails.code}`} size={80} /></div><p className="text-xs text-gray-400">Teklifinizi sorgulamak için QR kodu okutun</p><p className="text-xs text-gray-500 font-mono mt-1">{quickOfferDetails.code}</p></div>
           </div>
         </div>
@@ -294,30 +353,35 @@ export default function AscariDashboard() {
     }
 
     return (
-      <div className="flex h-full gap-4 animate-fadeIn no-print">
-        <div className="w-1/4 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col">
+      <div className="flex flex-col lg:flex-row h-full gap-4 animate-fadeIn no-print">
+        {/* Categories - Hide on mobile, show as drawer or toggle */}
+        <div className="hidden lg:block lg:w-1/4 bg-white rounded-xl shadow-sm border border-slate-200 flex-col">
           <div className="p-4 border-b font-bold text-slate-700 bg-slate-50 rounded-t-xl">Kategoriler</div>
           <div className="p-2 flex-1 overflow-y-auto"><CategoryTree categories={data.categories} selectedId={selectedCategoryId} onSelect={setSelectedCategoryId} /></div>
         </div>
-        <div className={`${isOfferMode ? 'w-1/2' : 'w-3/4'} flex flex-col gap-4`}>
-          <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex gap-2">
-            <div className="relative flex-1"><Search className="absolute left-3 top-3 text-slate-400 w-5 h-5" /><input className="w-full pl-10 border p-2.5 rounded-lg" placeholder="Sunucuda Ara..." value={productSearch} onChange={e => setProductSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && performSearch('product.product', productSearch)} /></div>
-            <button onClick={() => performSearch('product.product', productSearch)} className="bg-indigo-600 text-white px-6 rounded-lg">Ara</button>
+
+        {/* Products */}
+        <div className={`flex-1 flex flex-col gap-4`}>
+          <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row gap-2">
+            <div className="relative flex-1"><Search className="absolute left-3 top-3 text-slate-400 w-5 h-5" /><input className="w-full pl-10 border-2 p-3 rounded-lg touch-target" placeholder="Sunucuda Ara..." value={productSearch} onChange={e => setProductSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && performSearch('product.product', productSearch)} /></div>
+            <button onClick={() => performSearch('product.product', productSearch)} className="bg-indigo-600 text-white px-6 py-3 rounded-lg touch-target">Ara</button>
           </div>
           <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 p-4 overflow-y-auto">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">{filtered.map(p => <ProductCard key={p.id} product={p} onAdd={addToCart} onInfo={setSelectedProduct} />)}</div>
+            <div className="grid grid-cols-1 gap-4">{filtered.map(p => <ProductCard key={p.id} product={p} onAdd={addToCart} onInfo={setSelectedProduct} />)}</div>
             {filtered.length === 0 && <div className="text-center py-20 text-slate-400">Ürün yok.</div>}
           </div>
         </div>
+
+        {/* Cart - Mobile: Bottom drawer, Desktop: Sidebar */}
         {isOfferMode && (
-          <div className="w-1/4 bg-white rounded-xl shadow-lg border border-slate-200 flex flex-col">
+          <div className="lg:w-1/4 bg-white rounded-xl shadow-lg border border-slate-200 flex flex-col">
             <div className="p-4 bg-slate-900 text-white font-bold rounded-t-xl flex justify-between"><span>Sepet</span><span className="bg-indigo-500 px-2 rounded text-xs py-1">{quickCart.length}</span></div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">{quickCart.map(i => <div key={i.id} className="flex justify-between items-center border-b pb-3 gap-2"><div className="flex-1 pr-2"><div className="text-sm font-medium truncate">{i.name}</div><div className="text-xs text-slate-400">{formatCurrency(i.list_price)}</div></div><div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1 touch-manipulation"><button onClick={() => setQuickCart(prev => prev.map(x => x.id === i.id ? { ...x, qty: Math.max(1, x.qty - 1) } : x))} className="px-3 py-2 hover:bg-slate-200 rounded active:scale-95 transition-transform text-lg font-bold">-</button><span className="text-base font-bold min-w-[2rem] text-center">{i.qty}</span><button onClick={() => addToCart(i)} className="px-3 py-2 hover:bg-slate-200 rounded active:scale-95 transition-transform text-lg font-bold">+</button></div><button onClick={() => setQuickCart(prev => prev.filter(x => x.id !== i.id))} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded touch-manipulation active:scale-95 transition-transform"><Trash2 className="w-5 h-5" /></button></div>)}</div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">{quickCart.map(i => <div key={i.id} className="flex justify-between items-center border-b pb-3 gap-2"><div className="flex-1 pr-2"><div className="text-sm font-medium truncate">{i.name}</div><div className="text-xs text-slate-400">{formatCurrency(i.list_price)}</div></div><div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1 touch-manipulation"><button onClick={() => setQuickCart(prev => prev.map(x => x.id === i.id ? { ...x, qty: Math.max(1, x.qty - 1) } : x))} className="px-3 py-2 hover:bg-slate-200 rounded active:scale-95 transition-transform text-lg font-bold touch-target">-</button><span className="text-base font-bold min-w-[2rem] text-center">{i.qty}</span><button onClick={() => addToCart(i)} className="px-3 py-2 hover:bg-slate-200 rounded active:scale-95 transition-transform text-lg font-bold touch-target">+</button></div><button onClick={() => setQuickCart(prev => prev.filter(x => x.id !== i.id))} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded touch-manipulation active:scale-95 transition-transform touch-target"><Trash2 className="w-5 h-5" /></button></div>)}</div>
             <div className="p-4 border-t bg-slate-50 rounded-b-xl space-y-3">
               <div className="flex justify-between font-bold text-lg"><span>Toplam</span><span>{formatCurrency(quickCart.reduce((a, b) => a + (b.list_price * b.qty), 0))}</span></div>
-              <input className="w-full border-2 p-3 rounded-lg text-base touch-manipulation" placeholder="Müşteri Adı (Opsiyonel)" value={tempCustomerName} onChange={e => setTempCustomerName(e.target.value)} />
-              <input className="w-full border-2 p-3 rounded-lg text-base touch-manipulation" placeholder="Telefon (Opsiyonel)" value={tempCustomerPhone} onChange={e => setTempCustomerPhone(e.target.value)} />
-              <button onClick={createQuickOffer} disabled={quickCart.length === 0} className="w-full bg-indigo-600 text-white py-4 rounded-lg font-bold text-lg disabled:opacity-50 hover:bg-indigo-700 active:scale-98 transition-transform touch-manipulation">Teklif Oluştur</button>
+              <input className="w-full border-2 p-3 rounded-lg text-base touch-target" placeholder="Müşteri Adı (Opsiyonel)" value={tempCustomerName} onChange={e => setTempCustomerName(e.target.value)} />
+              <input className="w-full border-2 p-3 rounded-lg text-base touch-target" placeholder="Telefon (Opsiyonel)" value={tempCustomerPhone} onChange={e => setTempCustomerPhone(e.target.value)} />
+              <button onClick={createQuickOffer} disabled={quickCart.length === 0} className="w-full bg-indigo-600 text-white py-4 rounded-lg font-bold text-lg disabled:opacity-50 hover:bg-indigo-700 active:scale-98 transition-transform touch-target">Teklif Oluştur</button>
             </div>
           </div>
         )}
@@ -325,58 +389,240 @@ export default function AscariDashboard() {
     );
   };
 
-  // 2. TEKNİK SERVİS
+  // 2. TEKNİK SERVİS - Enhanced with summary cards
   const renderHelpdesk = () => {
+    const tickets = data.tickets || [];
+    const openTickets = tickets.filter(t => t.status === 'new' || t.status === 'progress');
+    const closedTickets = tickets.filter(t => t.status === 'solved');
+    const urgentTickets = tickets.filter(t => t.priority === 'high' || t.priority === 'urgent');
+
+    const filteredTickets = ticketSearch
+      ? tickets.filter(t =>
+        t.customer?.toLowerCase().includes(ticketSearch.toLowerCase()) ||
+        t.product?.toLowerCase().includes(ticketSearch.toLowerCase()) ||
+        t.issue?.toLowerCase().includes(ticketSearch.toLowerCase())
+      )
+      : tickets;
+
     if (selectedTicket) {
       return (
-        <div className="space-y-6 animate-fadeIn">
-          <button onClick={() => setSelectedTicket(null)} className="text-slate-500 flex items-center mb-4"><ArrowLeft className="mr-2 w-4 h-4" /> Listeye Dön</button>
-          <div className="bg-white shadow rounded-lg p-6 border border-slate-200">
-            <h2 className="text-2xl font-bold mb-1">{selectedTicket.issue}</h2>
-            <p className="text-sm text-slate-500 mb-6">#{selectedTicket.id}</p>
-            <div className="grid grid-cols-2 gap-6 mb-6">
-              <div className="p-4 bg-slate-50 rounded border"><h4 className="font-bold text-xs uppercase text-slate-400 mb-1">Müşteri</h4><p>{selectedTicket.customer}</p></div>
-              <div className="p-4 bg-slate-50 rounded border"><h4 className="font-bold text-xs uppercase text-slate-400 mb-1">Ürün</h4><p>{selectedTicket.product}</p></div>
+        <div className="space-y-4 md:space-y-6 animate-fadeIn">
+          <button onClick={() => setSelectedTicket(null)} className="text-slate-500 flex items-center mb-4 touch-target">
+            <ArrowLeft className="mr-2 w-4 h-4" /> Listeye Dön
+          </button>
+          <div className="bg-white shadow rounded-lg p-4 md:p-6 border border-slate-200">
+            <h2 className="text-xl md:text-2xl font-bold mb-1">{selectedTicket.issue}</h2>
+            <p className="text-sm text-slate-500 mb-4 md:mb-6">#{selectedTicket.id}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-4 md:mb-6">
+              <div className="p-4 bg-slate-50 rounded border">
+                <h4 className="font-bold text-xs uppercase text-slate-400 mb-1">Müşteri</h4>
+                <p>{selectedTicket.customer}</p>
+              </div>
+              <div className="p-4 bg-slate-50 rounded border">
+                <h4 className="font-bold text-xs uppercase text-slate-400 mb-1">Ürün</h4>
+                <p>{selectedTicket.product}</p>
+              </div>
             </div>
-            <div className="flex items-center gap-4 border-t pt-4">
-              <span className="font-bold">Durum Güncelle:</span>
-              <button className="px-3 py-1 bg-blue-100 text-blue-800 rounded text-sm">Yeni</button>
-              <button className="px-3 py-1 bg-orange-100 text-orange-800 rounded text-sm">İşlemde</button>
-              <button className="px-3 py-1 bg-green-100 text-green-800 rounded text-sm">Çözüldü</button>
+            <div className="border-t pt-4 space-y-4">
+              <div>
+                <span className="font-bold block mb-2">Durum Güncelle:</span>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => updateTicketStatus(selectedTicket.id, 'new')} className="px-4 py-2 bg-blue-100 text-blue-800 rounded text-sm font-medium touch-target">Yeni</button>
+                  <button onClick={() => updateTicketStatus(selectedTicket.id, 'progress')} className="px-4 py-2 bg-orange-100 text-orange-800 rounded text-sm font-medium touch-target">İşlemde</button>
+                  <button onClick={() => updateTicketStatus(selectedTicket.id, 'solved')} className="px-4 py-2 bg-green-100 text-green-800 rounded text-sm font-medium touch-target">Çözüldü</button>
+                </div>
+              </div>
+              <div className="border-t pt-4">
+                <label className="font-bold block mb-2">Not Ekle:</label>
+                <textarea
+                  className="w-full border-2 p-3 rounded-lg text-base resize-none touch-target"
+                  rows="4"
+                  placeholder="Ticket hakkında not ekleyin..."
+                  value={ticketNotes}
+                  onChange={e => setTicketNotes(e.target.value)}
+                />
+                <button
+                  onClick={() => addTicketNote(selectedTicket.id, ticketNotes)}
+                  className="mt-2 bg-indigo-600 text-white px-4 py-2 rounded-lg touch-target"
+                  disabled={!ticketNotes.trim()}
+                >
+                  Notu Kaydet
+                </button>
+              </div>
             </div>
           </div>
         </div>
       );
     }
+
     return (
-      <div className="space-y-6 animate-fadeIn">
-        <div className="flex justify-between items-center"><h2 className="text-xl font-bold">Arıza Kayıtları</h2><button onClick={() => setShowNewTicketForm(true)} className="bg-indigo-600 text-white px-4 py-2 rounded-lg">Yeni Kayıt</button></div>
-        {showNewTicketForm && <div className="bg-white p-6 rounded-lg shadow-lg border mb-6"><div className="flex justify-between mb-4 font-bold"><h3>Yeni Kayıt</h3><button onClick={() => setShowNewTicketForm(false)}><X /></button></div><div className="grid grid-cols-2 gap-4"><input className="border p-2 rounded" placeholder="Müşteri" /><input className="border p-2 rounded" placeholder="Ürün" /><textarea className="border p-2 rounded col-span-2" placeholder="Sorun..." /><button className="bg-indigo-600 text-white p-2 rounded col-span-2">Kaydet</button></div></div>}
-        <div className="bg-white rounded-lg shadow overflow-hidden"><table className="w-full text-left"><thead className="bg-slate-50 text-slate-500 border-b"><tr><th className="p-4">Müşteri</th><th className="p-4">Ürün</th><th className="p-4">Durum</th></tr></thead><tbody className="divide-y">{(data.tickets || []).map(t => <tr key={t.id} onClick={() => setSelectedTicket(t)} className="hover:bg-slate-50 cursor-pointer"><td className="p-4 font-medium">{t.customer}</td><td className="p-4">{t.product}</td><td className="p-4"><StatusBadge status={t.status} /></td></tr>)}</tbody></table></div>
+      <div className="space-y-4 md:space-y-6 animate-fadeIn">
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white p-4 md:p-6 rounded-xl shadow border-l-4 border-blue-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-slate-500 text-sm font-medium">Açık Ticketlar</p>
+                <h3 className="text-2xl md:text-3xl font-bold text-slate-800 mt-2">{openTickets.length}</h3>
+              </div>
+              <Clock className="w-10 h-10 md:w-12 md:h-12 text-blue-500 opacity-20" />
+            </div>
+          </div>
+          <div className="bg-white p-4 md:p-6 rounded-xl shadow border-l-4 border-green-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-slate-500 text-sm font-medium">Kapalı Ticketlar</p>
+                <h3 className="text-2xl md:text-3xl font-bold text-slate-800 mt-2">{closedTickets.length}</h3>
+              </div>
+              <CheckSquare className="w-10 h-10 md:w-12 md:h-12 text-green-500 opacity-20" />
+            </div>
+          </div>
+          <div className="bg-white p-4 md:p-6 rounded-xl shadow border-l-4 border-red-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-slate-500 text-sm font-medium">Acil Ticketlar</p>
+                <h3 className="text-2xl md:text-3xl font-bold text-slate-800 mt-2">{urgentTickets.length}</h3>
+              </div>
+              <AlertTriangle className="w-10 h-10 md:w-12 md:h-12 text-red-500 opacity-20" />
+            </div>
+          </div>
+        </div>
+
+        {/* Search & New Button */}
+        <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-3 text-slate-400 w-5 h-5" />
+            <input
+              className="w-full pl-10 border-2 p-3 rounded-lg touch-target"
+              placeholder="Ticket Ara (Müşteri, Ürün, Sorun)..."
+              value={ticketSearch}
+              onChange={e => setTicketSearch(e.target.value)}
+            />
+          </div>
+          <button onClick={() => setShowNewTicketForm(true)} className="bg-indigo-600 text-white px-6 py-3 rounded-lg font-medium touch-target whitespace-nowrap">
+            Yeni Kayıt
+          </button>
+        </div>
+
+        {showNewTicketForm && (
+          <div className="bg-white p-4 md:p-6 rounded-lg shadow-lg border">
+            <div className="flex justify-between mb-4 font-bold">
+              <h3 className="text-lg">Yeni Kayıt</h3>
+              <button onClick={() => setShowNewTicketForm(false)} className="touch-target"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <input className="border-2 p-3 rounded-lg touch-target" placeholder="Müşteri" />
+              <input className="border-2 p-3 rounded-lg touch-target" placeholder="Ürün" />
+              <textarea className="border-2 p-3 rounded-lg col-span-1 md:col-span-2 touch-target" rows="3" placeholder="Sorun..." />
+              <button className="bg-indigo-600 text-white p-3 rounded-lg col-span-1 md:col-span-2 font-medium touch-target">Kaydet</button>
+            </div>
+          </div>
+        )}
+
+        {/* Tickets List - Responsive */}
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          {/* Desktop Table */}
+          <div className="hidden md:block table-scroll">
+            <table className="w-full text-left">
+              <thead className="bg-slate-50 text-slate-500 border-b">
+                <tr>
+                  <th className="p-4">Müşteri</th>
+                  <th className="p-4">Ürün</th>
+                  <th className="p-4">Sorun</th>
+                  <th className="p-4">Durum</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {filteredTickets.map(t => (
+                  <tr key={t.id} onClick={() => setSelectedTicket(t)} className="hover:bg-slate-50 cursor-pointer">
+                    <td className="p-4 font-medium">{t.customer}</td>
+                    <td className="p-4">{t.product}</td>
+                    <td className="p-4 text-sm text-slate-600">{t.issue}</td>
+                    <td className="p-4"><StatusBadge status={t.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Cards */}
+          <div className="md:hidden divide-y">
+            {filteredTickets.map(t => (
+              <div key={t.id} onClick={() => setSelectedTicket(t)} className="p-4 active:bg-slate-50">
+                <div className="flex justify-between items-start mb-2">
+                  <div className="font-bold text-slate-800">{t.customer}</div>
+                  <StatusBadge status={t.status} />
+                </div>
+                <div className="text-sm text-slate-600 mb-1">{t.product}</div>
+                <div className="text-sm text-slate-500">{t.issue}</div>
+              </div>
+            ))}
+          </div>
+
+          {filteredTickets.length === 0 && (
+            <div className="p-8 text-center text-slate-400">Ticket bulunamadı.</div>
+          )}
+        </div>
       </div>
     );
   };
 
-  // 3. SATIŞLAR
+  // 3. SATIŞLAR - Responsive
   const renderSales = () => {
     if (selectedOrder) {
       return (
-        <div className="space-y-6 animate-fadeIn">
-          <button onClick={() => setSelectedOrder(null)} className="flex items-center text-slate-500 mb-4"><ArrowLeft className="mr-2 w-4 h-4" /> Geri Dön</button>
-          <div className="bg-white shadow rounded-lg p-6 border border-slate-200">
-            <div className="flex justify-between border-b pb-4 mb-4"><div><h2 className="text-2xl font-bold">{selectedOrder.name}</h2><p className="text-slate-500">{selectedOrder.customer}</p></div><StatusBadge status={selectedOrder.status} /></div>
-            <table className="w-full text-sm"><thead className="bg-slate-50 text-left"><tr><th className="p-3">Ürün</th><th className="p-3 text-right">Adet</th><th className="p-3 text-right">Tutar</th></tr></thead><tbody>{selectedOrderLines.length > 0 ? selectedOrderLines.map((l, i) => <tr key={i} className="border-b"><td className="p-3">{l.name}</td><td className="p-3 text-right">{l.qty}</td><td className="p-3 text-right font-bold">{formatCurrency(l.total)}</td></tr>) : <tr><td colSpan="3" className="p-4 text-center">Yükleniyor...</td></tr>}</tbody></table>
-            <div className="text-right mt-4 text-xl font-bold">Toplam: {formatCurrency(selectedOrder.amount)}</div>
+        <div className="space-y-4 md:space-y-6 animate-fadeIn">
+          <button onClick={() => setSelectedOrder(null)} className="flex items-center text-slate-500 mb-4 touch-target"><ArrowLeft className="mr-2 w-4 h-4" /> Geri Dön</button>
+          <div className="bg-white shadow rounded-lg p-4 md:p-6 border border-slate-200">
+            <div className="flex flex-col md:flex-row justify-between border-b pb-4 mb-4 gap-4">
+              <div><h2 className="text-xl md:text-2xl font-bold">{selectedOrder.name}</h2><p className="text-slate-500">{selectedOrder.customer}</p></div>
+              <StatusBadge status={selectedOrder.status} />
+            </div>
+            <div className="overflow-x-auto table-scroll">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-left"><tr><th className="p-3">Ürün</th><th className="p-3 text-right">Adet</th><th className="p-3 text-right">Tutar</th></tr></thead>
+                <tbody>{selectedOrderLines.length > 0 ? selectedOrderLines.map((l, i) => <tr key={i} className="border-b"><td className="p-3">{l.name}</td><td className="p-3 text-right">{l.qty}</td><td className="p-3 text-right font-bold">{formatCurrency(l.total)}</td></tr>) : <tr><td colSpan="3" className="p-4 text-center">Yükleniyor...</td></tr>}</tbody>
+              </table>
+            </div>
+            <div className="text-right mt-4 text-lg md:text-xl font-bold">Toplam: {formatCurrency(selectedOrder.amount)}</div>
           </div>
         </div>
       )
     }
     const filtered = (data.orders || []).filter(o => salesFilter === 'all' ? true : salesFilter === 'sale' ? ['sale', 'done'].includes(o.status) : o.status === 'draft');
     return (
-      <div className="space-y-6 animate-fadeIn">
-        <div className="flex gap-2 bg-slate-100 p-1 rounded-lg w-fit"><button onClick={() => setSalesFilter('all')} className={`px-4 py-2 rounded-md text-sm font-bold ${salesFilter === 'all' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>Tümü</button><button onClick={() => setSalesFilter('sale')} className={`px-4 py-2 rounded-md text-sm font-bold ${salesFilter === 'sale' ? 'bg-white shadow text-green-600' : 'text-slate-500'}`}>Siparişler</button><button onClick={() => setSalesFilter('draft')} className={`px-4 py-2 rounded-md text-sm font-bold ${salesFilter === 'draft' ? 'bg-white shadow text-blue-600' : 'text-slate-500'}`}>Teklifler</button></div>
-        <div className="bg-white p-3 rounded-lg shadow-sm flex gap-2"><input className="w-full border p-2 rounded" placeholder="Sipariş Ara..." onKeyDown={e => e.key === 'Enter' && performSearch('sale.order', e.target.value)} /><button className="bg-slate-800 text-white px-4 rounded">Ara</button></div>
-        <div className="bg-white rounded-lg shadow overflow-hidden"><table className="w-full text-left"><thead className="bg-slate-50 text-slate-500 border-b"><tr><th className="p-4">Ref</th><th className="p-4">Müşteri</th><th className="p-4 text-right">Tutar</th><th className="p-4">Durum</th></tr></thead><tbody className="divide-y">{filtered.map(o => <tr key={o.id} onClick={() => { setSelectedOrder(o); fetchOrderDetails(o.id_raw); }} className="hover:bg-slate-50 cursor-pointer"><td className="p-4 font-bold text-indigo-600">{o.name}</td><td className="p-4">{o.customer}</td><td className="p-4 text-right font-bold">{formatCurrency(o.amount)}</td><td className="p-4"><StatusBadge status={o.status} /></td></tr>)}</tbody></table></div>
+      <div className="space-y-4 md:space-y-6 animate-fadeIn">
+        <div className="flex gap-2 bg-slate-100 p-1 rounded-lg w-full md:w-fit overflow-x-auto scrollbar-hide">
+          <button onClick={() => setSalesFilter('all')} className={`px-4 py-2 rounded-md text-sm font-bold whitespace-nowrap touch-target ${salesFilter === 'all' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>Tümü</button>
+          <button onClick={() => setSalesFilter('sale')} className={`px-4 py-2 rounded-md text-sm font-bold whitespace-nowrap touch-target ${salesFilter === 'sale' ? 'bg-white shadow text-green-600' : 'text-slate-500'}`}>Siparişler</button>
+          <button onClick={() => setSalesFilter('draft')} className={`px-4 py-2 rounded-md text-sm font-bold whitespace-nowrap touch-target ${salesFilter === 'draft' ? 'bg-white shadow text-blue-600' : 'text-slate-500'}`}>Teklifler</button>
+        </div>
+        <div className="bg-white p-3 rounded-lg shadow-sm flex flex-col sm:flex-row gap-2">
+          <input className="flex-1 border-2 p-3 rounded-lg touch-target" placeholder="Sipariş Ara..." onKeyDown={e => e.key === 'Enter' && performSearch('sale.order', e.target.value)} />
+          <button className="bg-slate-800 text-white px-6 py-3 rounded-lg touch-target">Ara</button>
+        </div>
+        {/* Desktop Table */}
+        <div className="hidden md:block bg-white rounded-lg shadow overflow-hidden">
+          <div className="table-scroll">
+            <table className="w-full text-left">
+              <thead className="bg-slate-50 text-slate-500 border-b"><tr><th className="p-4">Ref</th><th className="p-4">Müşteri</th><th className="p-4 text-right">Tutar</th><th className="p-4">Durum</th></tr></thead>
+              <tbody className="divide-y">{filtered.map(o => <tr key={o.id} onClick={() => { setSelectedOrder(o); fetchOrderDetails(o.id_raw); }} className="hover:bg-slate-50 cursor-pointer"><td className="p-4 font-bold text-indigo-600">{o.name}</td><td className="p-4">{o.customer}</td><td className="p-4 text-right font-bold">{formatCurrency(o.amount)}</td><td className="p-4"><StatusBadge status={o.status} /></td></tr>)}</tbody>
+            </table>
+          </div>
+        </div>
+        {/* Mobile Cards */}
+        <div className="md:hidden bg-white rounded-lg shadow overflow-hidden divide-y">
+          {filtered.map(o => (
+            <div key={o.id} onClick={() => { setSelectedOrder(o); fetchOrderDetails(o.id_raw); }} className="p-4 active:bg-slate-50">
+              <div className="flex justify-between items-start mb-2">
+                <div className="font-bold text-indigo-600 text-base">{o.name}</div>
+                <StatusBadge status={o.status} />
+              </div>
+              <div className="text-sm text-slate-600 mb-2">{o.customer}</div>
+              <div className="font-bold text-base">{formatCurrency(o.amount)}</div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   };
@@ -417,31 +663,245 @@ export default function AscariDashboard() {
 
   const renderCustomers = () => {
     if (selectedCustomer) {
-      return (<div className="space-y-6 animate-fadeIn no-print"><button onClick={() => setSelectedCustomer(null)} className="flex items-center text-slate-500"><ArrowLeft className="w-4 h-4 mr-2" /> Listeye Dön</button><div className="grid grid-cols-3 gap-6"><div className="col-span-1 bg-white p-6 rounded-lg shadow text-center border-t-4 border-indigo-500"><div className="w-20 h-20 bg-slate-100 rounded-full mx-auto flex items-center justify-center text-2xl font-bold text-slate-500 mb-4">{selectedCustomer.name.charAt(0)}</div><h2 className="font-bold text-lg">{selectedCustomer.name}</h2><div className="mt-4 text-sm text-left space-y-2"><div className="flex items-center"><Mail className="w-4 h-4 mr-2 text-slate-400" /> {selectedCustomer.email}</div><div className="flex items-center"><Phone className="w-4 h-4 mr-2 text-slate-400" /> {selectedCustomer.phone}</div></div><div className="mt-6 pt-4 border-t text-2xl font-bold text-slate-800">{formatCurrency(selectedCustomer.balance)}</div><div className="text-xs text-slate-500">Bakiye</div></div><div className="col-span-2 bg-white rounded-lg shadow overflow-hidden"><div className="flex border-b"><button onClick={() => setCustomerDetailTab('orders')} className={`flex-1 py-3 ${customerDetailTab === 'orders' ? 'border-b-2 border-indigo-600 font-bold' : ''}`}>Siparişler</button><button onClick={() => setCustomerDetailTab('invoices')} className={`flex-1 py-3 ${customerDetailTab === 'invoices' ? 'border-b-2 border-indigo-600 font-bold' : ''}`}>Faturalar</button></div><div className="p-4 max-h-[400px] overflow-y-auto">{customerDetailTab === 'orders' && <div className="text-center text-slate-500 py-10">Sipariş verisi yükleniyor...</div>}</div></div></div></div>)
-    }
-    const filteredContacts = (data.customers || []).filter(c => customerBalanceFilter === 'all' ? true : customerBalanceFilter === 'debtor' ? c.balance > 0 : c.balance <= 0);
-    return (
-      <div className="space-y-6 no-print">
-        <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm">
-          <div className="flex space-x-2">
-            <button onClick={() => setCustomerBalanceFilter('all')} className={`px-3 py-1 rounded text-xs ${customerBalanceFilter === 'all' ? 'bg-indigo-100' : 'bg-slate-100'}`}>Tümü</button>
-            <button onClick={() => setCustomerBalanceFilter('debtor')} className={`px-3 py-1 rounded text-xs ${customerBalanceFilter === 'debtor' ? 'bg-red-100' : 'bg-slate-100'}`}>Borçlular</button>
-            <button onClick={() => setCustomerBalanceFilter('creditor')} className={`px-3 py-1 rounded text-xs ${customerBalanceFilter === 'creditor' ? 'bg-green-100' : 'bg-slate-100'}`}>Alacaklılar</button>
-          </div>
-          <div className="flex gap-2">
-            <input className="border p-2 rounded text-sm" placeholder="Cari Ara..." value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && performSearch('res.partner', customerSearch)} />
-            <button className="bg-indigo-600 text-white px-3 rounded" onClick={() => performSearch('res.partner', customerSearch)}>Ara</button>
+      return (
+        <div className="space-y-4 md:space-y-6 animate-fadeIn no-print">
+          <button onClick={() => setSelectedCustomer(null)} className="flex items-center text-slate-500 touch-target">
+            <ArrowLeft className="w-4 h-4 mr-2" /> Listeye Dön
+          </button>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+            {/* Customer Info Card */}
+            <div className="lg:col-span-1 bg-white p-4 md:p-6 rounded-lg shadow text-center border-t-4 border-indigo-500">
+              <div className="w-16 h-16 md:w-20 md:h-20 bg-slate-100 rounded-full mx-auto flex items-center justify-center text-xl md:text-2xl font-bold text-slate-500 mb-4">
+                {selectedCustomer.name.charAt(0)}
+              </div>
+              <h2 className="font-bold text-base md:text-lg">{selectedCustomer.name}</h2>
+              <div className="mt-4 text-sm text-left space-y-2">
+                <div className="flex items-center break-all">
+                  <Mail className="w-4 h-4 mr-2 text-slate-400 flex-shrink-0" />
+                  <span className="text-xs md:text-sm">{selectedCustomer.email}</span>
+                </div>
+                <div className="flex items-center">
+                  <Phone className="w-4 h-4 mr-2 text-slate-400 flex-shrink-0" />
+                  <span className="text-xs md:text-sm">{selectedCustomer.phone}</span>
+                </div>
+              </div>
+              <div className="mt-6 pt-4 border-t text-xl md:text-2xl font-bold text-slate-800">
+                {formatCurrency(selectedCustomer.balance)}
+              </div>
+              <div className="text-xs text-slate-500">Bakiye</div>
+            </div>
+
+            {/* Customer Detail Tabs */}
+            <div className="lg:col-span-2 bg-white rounded-lg shadow overflow-hidden">
+              {/* Tabs - Scrollable on Mobile */}
+              <div className="flex border-b overflow-x-auto scrollbar-hide">
+                <button onClick={() => setCustomerDetailTab('orders')} className={`flex-1 min-w-[100px] py-3 px-2 text-sm md:text-base whitespace-nowrap ${customerDetailTab === 'orders' ? 'border-b-2 border-indigo-600 font-bold text-indigo-600' : 'text-slate-600'}`}>Siparişler</button>
+                <button onClick={() => setCustomerDetailTab('invoices')} className={`flex-1 min-w-[100px] py-3 px-2 text-sm md:text-base whitespace-nowrap ${customerDetailTab === 'invoices' ? 'border-b-2 border-indigo-600 font-bold text-indigo-600' : 'text-slate-600'}`}>Faturalar</button>
+                <button onClick={() => setCustomerDetailTab('quotes')} className={`flex-1 min-w-[100px] py-3 px-2 text-sm md:text-base whitespace-nowrap ${customerDetailTab === 'quotes' ? 'border-b-2 border-indigo-600 font-bold text-indigo-600' : 'text-slate-600'}`}>Teklifler</button>
+                <button onClick={() => setCustomerDetailTab('tickets')} className={`flex-1 min-w-[100px] py-3 px-2 text-sm md:text-base whitespace-nowrap ${customerDetailTab === 'tickets' ? 'border-b-2 border-indigo-600 font-bold text-indigo-600' : 'text-slate-600'}`}>Teknik Servis</button>
+                <button onClick={() => setCustomerDetailTab('payments')} className={`flex-1 min-w-[100px] py-3 px-2 text-sm md:text-base whitespace-nowrap ${customerDetailTab === 'payments' ? 'border-b-2 border-indigo-600 font-bold text-indigo-600' : 'text-slate-600'}`}>Ödemeler</button>
+              </div>
+
+              {/* Tab Content */}
+              <div className="p-4 max-h-[400px] md:max-h-[500px] overflow-y-auto">
+                {customerDetailTab === 'orders' && (
+                  <div>
+                    {customerOrders.length > 0 ? (
+                      <div className="space-y-2">
+                        {customerOrders.map(o => (
+                          <div key={o.id} className="border rounded-lg p-3 md:p-4 hover:bg-slate-50">
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="font-bold text-indigo-600 text-sm md:text-base">{o.name}</div>
+                              <StatusBadge status={o.status} />
+                            </div>
+                            <div className="text-xs md:text-sm text-slate-500">{o.date || 'N/A'}</div>
+                            <div className="font-bold text-sm md:text-base mt-2">{formatCurrency(o.amount)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center text-slate-500 py-10">Sipariş bulunamadı</div>
+                    )}
+                  </div>
+                )}
+
+                {customerDetailTab === 'invoices' && (
+                  <div>
+                    {customerInvoices.length > 0 ? (
+                      <div className="space-y-2">
+                        {customerInvoices.map(inv => (
+                          <div key={inv.id} className="border rounded-lg p-3 md:p-4 hover:bg-slate-50">
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="font-bold text-sm md:text-base">{inv.id}</div>
+                              <PaymentBadge state={inv.payment_state} />
+                            </div>
+                            <div className="text-xs md:text-sm text-slate-500">{inv.date}</div>
+                            <div className="font-bold text-sm md:text-base mt-2">{formatCurrency(inv.amount)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center text-slate-500 py-10">Fatura bulunamadı</div>
+                    )}
+                  </div>
+                )}
+
+                {customerDetailTab === 'quotes' && (
+                  <div>
+                    {customerQuotes.length > 0 ? (
+                      <div className="space-y-2">
+                        {customerQuotes.map(q => (
+                          <div key={q.id} className="border rounded-lg p-3 md:p-4 hover:bg-slate-50">
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="font-bold text-indigo-600 text-sm md:text-base">{q.name}</div>
+                              <StatusBadge status={q.status} />
+                            </div>
+                            <div className="text-xs md:text-sm text-slate-500">{q.date || 'N/A'}</div>
+                            <div className="font-bold text-sm md:text-base mt-2">{formatCurrency(q.amount)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center text-slate-500 py-10">Teklif bulunamadı</div>
+                    )}
+                  </div>
+                )}
+
+                {customerDetailTab === 'tickets' && (
+                  <div>
+                    {customerTickets.length > 0 ? (
+                      <div className="space-y-2">
+                        {customerTickets.map(t => (
+                          <div key={t.id} className="border rounded-lg p-3 md:p-4 hover:bg-slate-50">
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="font-bold text-sm md:text-base">{t.product}</div>
+                              <StatusBadge status={t.status} />
+                            </div>
+                            <div className="text-xs md:text-sm text-slate-600">{t.issue}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center text-slate-500 py-10">Teknik servis kaydı bulunamadı</div>
+                    )}
+                  </div>
+                )}
+
+                {customerDetailTab === 'payments' && (
+                  <div className="space-y-4">
+                    {/* Payment Form */}
+                    <div className="border-2 border-indigo-200 rounded-lg p-4 bg-indigo-50">
+                      <h3 className="font-bold mb-4 text-sm md:text-base">Yeni Ödeme Kaydet</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <input
+                          type="number"
+                          className="border-2 p-3 rounded-lg touch-target"
+                          placeholder="Tutar (₺)"
+                          value={newPayment.amount}
+                          onChange={e => setNewPayment({ ...newPayment, amount: e.target.value })}
+                        />
+                        <input
+                          type="date"
+                          className="border-2 p-3 rounded-lg touch-target"
+                          value={newPayment.date}
+                          onChange={e => setNewPayment({ ...newPayment, date: e.target.value })}
+                        />
+                        <select
+                          className="border-2 p-3 rounded-lg touch-target"
+                          value={newPayment.method}
+                          onChange={e => setNewPayment({ ...newPayment, method: e.target.value })}
+                        >
+                          <option value="cash">Nakit</option>
+                          <option value="card">Kredi Kartı</option>
+                          <option value="transfer">Havale/EFT</option>
+                        </select>
+                        <input
+                          type="text"
+                          className="border-2 p-3 rounded-lg touch-target"
+                          placeholder="Not (Opsiyonel)"
+                          value={newPayment.note}
+                          onChange={e => setNewPayment({ ...newPayment, note: e.target.value })}
+                        />
+                      </div>
+                      <button
+                        onClick={savePayment}
+                        disabled={!newPayment.amount || !newPayment.date}
+                        className="w-full mt-3 bg-indigo-600 text-white p-3 rounded-lg font-medium touch-target disabled:opacity-50"
+                      >
+                        Ödeme Kaydet
+                      </button>
+                    </div>
+
+                    {/* Payment History */}
+                    <div>
+                      <h3 className="font-bold mb-3 text-sm md:text-base">Ödeme Geçmişi</h3>
+                      {customerPayments.length > 0 ? (
+                        <div className="space-y-2">
+                          {customerPayments.map(p => (
+                            <div key={p.id} className="border rounded-lg p-3 md:p-4 bg-green-50">
+                              <div className="flex justify-between items-start mb-1">
+                                <div className="font-bold text-green-700 text-sm md:text-base">{formatCurrency(p.amount)}</div>
+                                <div className="text-xs text-slate-500">{p.date}</div>
+                              </div>
+                              <div className="text-xs md:text-sm text-slate-600">Ödeme Yöntemi: {p.method === 'cash' ? 'Nakit' : p.method === 'card' ? 'Kredi Kartı' : 'Havale/EFT'}</div>
+                              {p.note && <div className="text-xs text-slate-500 mt-1">{p.note}</div>}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center text-slate-500 py-10">Ödeme kaydı bulunamadı</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
-        <div className="bg-white shadow rounded-lg overflow-hidden">
+      )
+    }
+
+    const filteredContacts = (data.customers || []).filter(c => customerBalanceFilter === 'all' ? true : customerBalanceFilter === 'debtor' ? c.balance > 0 : c.balance <= 0);
+    return (
+      <div className="space-y-4 md:space-y-6 no-print">
+        <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 bg-white p-4 rounded-lg shadow-sm">
+          <div className="flex space-x-2">
+            <button onClick={() => setCustomerBalanceFilter('all')} className={`px-3 py-2 rounded text-xs md:text-sm touch-target ${customerBalanceFilter === 'all' ? 'bg-indigo-100 font-bold' : 'bg-slate-100'}`}>Tümü</button>
+            <button onClick={() => setCustomerBalanceFilter('debtor')} className={`px-3 py-2 rounded text-xs md:text-sm touch-target ${customerBalanceFilter === 'debtor' ? 'bg-red-100 font-bold' : 'bg-slate-100'}`}>Borçlular</button>
+            <button onClick={() => setCustomerBalanceFilter('creditor')} className={`px-3 py-2 rounded text-xs md:text-sm touch-target ${customerBalanceFilter === 'creditor' ? 'bg-green-100 font-bold' : 'bg-slate-100'}`}>Alacaklılar</button>
+          </div>
+          <div className="flex gap-2">
+            <input className="flex-1 md:flex-none border-2 p-2 md:p-3 rounded-lg text-sm touch-target" placeholder="Cari Ara..." value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && performSearch('res.partner', customerSearch)} />
+            <button className="bg-indigo-600 text-white px-4 md:px-6 rounded-lg touch-target" onClick={() => performSearch('res.partner', customerSearch)}>Ara</button>
+          </div>
+        </div>
+
+        {/* Desktop Table */}
+        <div className="hidden md:block bg-white shadow rounded-lg overflow-hidden">
           <ul className="divide-y">
             {filteredContacts.map(c => (
               <li key={c.id} onClick={() => setSelectedCustomer(c)} className="p-4 flex justify-between hover:bg-slate-50 cursor-pointer">
-                <div><div className="font-bold">{c.name}</div><div className="text-xs text-slate-500">{c.phone}</div></div>
+                <div>
+                  <div className="font-bold">{c.name}</div>
+                  <div className="text-xs text-slate-500">{c.phone}</div>
+                </div>
                 <div className={`font-bold ${c.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>{formatCurrency(c.balance)}</div>
               </li>
             ))}
           </ul>
+        </div>
+
+        {/* Mobile Cards */}
+        <div className="md:hidden bg-white shadow rounded-lg overflow-hidden divide-y">
+          {filteredContacts.map(c => (
+            <div key={c.id} onClick={() => setSelectedCustomer(c)} className="p-4 active:bg-slate-50">
+              <div className="flex justify-between items-start mb-2">
+                <div className="font-bold text-base">{c.name}</div>
+                <div className={`font-bold text-base ${c.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>{formatCurrency(c.balance)}</div>
+              </div>
+              <div className="text-sm text-slate-500">{c.phone}</div>
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -474,67 +934,114 @@ export default function AscariDashboard() {
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 font-sans">
+    <div className="flex h-screen bg-slate-50 font-sans overflow-hidden">
       {renderProductModal()}
-      <div className="w-20 lg:w-64 bg-slate-900 text-white flex flex-col transition-all duration-300 no-print">
-        <div className="p-6 hidden lg:flex justify-center">
-          <img src="/logo.png" className="h-10 brightness-200" onError={(e) => e.target.style.display = 'none'} alt="Ascari" />
+
+      {/* Mobile Menu Overlay */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setIsMobileMenuOpen(false)} />
+      )}
+
+      {/* Sidebar - Responsive */}
+      <div className={`
+        fixed md:static inset-y-0 left-0 z-50
+        w-64 md:w-20 lg:w-64
+        bg-slate-900 text-white flex flex-col
+        transition-transform duration-300 ease-in-out
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+        no-print
+      `}>
+        {/* Logo */}
+        <div className="p-4 md:p-6 flex justify-between items-center">
+          <img src="/logo.png" className="h-8 md:h-10 brightness-200" onError={(e) => e.target.style.display = 'none'} alt="Ascari" />
+          <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden text-white p-2 touch-target">
+            <X className="w-6 h-6" />
+          </button>
         </div>
-        <div className="lg:hidden p-4 flex justify-center">
-          <img src="/logo.png" className="h-8 brightness-200" onError={(e) => e.target.style.display = 'none'} alt="Ascari" />
-        </div>
-        <nav className="flex-1 space-y-1 px-2 py-4">
+
+        {/* Menu Items */}
+        <nav className="flex-1 space-y-1 px-2 py-4 overflow-y-auto">
           {MENU_ITEMS.map(item => (
             (item.roles.includes(userRole)) && (
-              <button key={item.id} onClick={() => setActiveTab(item.id)} className={`flex items-center w-full p-4 rounded-xl transition-colors ${activeTab === item.id ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
-                <item.icon className="w-6 h-6 lg:mr-3" /> <span className="hidden lg:inline font-medium">{item.name}</span>
+              <button
+                key={item.id}
+                onClick={() => {
+                  setActiveTab(item.id);
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`flex items-center w-full p-4 rounded-xl transition-colors touch-target ${activeTab === item.id
+                    ? 'bg-indigo-600 text-white shadow-md'
+                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                  }`}
+              >
+                <item.icon className="w-6 h-6 mr-3 md:mr-0 lg:mr-3" />
+                <span className="md:hidden lg:inline font-medium">{item.name}</span>
               </button>
             )
           ))}
         </nav>
-        <button onClick={handleLogout} className="flex items-center text-slate-400 hover:text-white m-4 p-2 hover:bg-slate-800 rounded"><LogOut className="w-5 h-5 mr-2" /> <span className="hidden lg:inline">Çıkış</span></button>
+
+        {/* Logout */}
+        <button onClick={handleLogout} className="flex items-center text-slate-400 hover:text-white m-4 p-2 hover:bg-slate-800 rounded touch-target">
+          <LogOut className="w-5 h-5 mr-2 md:mr-0 lg:mr-2" />
+          <span className="md:hidden lg:inline">Çıkış</span>
+        </button>
       </div>
+
+      {/* Main Content */}
       <div className="flex-1 overflow-hidden flex flex-col">
+        {/* Mobile Header */}
+        <div className="md:hidden bg-white border-b px-4 py-3 flex items-center justify-between no-print">
+          <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 touch-target">
+            <Menu className="w-6 h-6 text-slate-700" />
+          </button>
+          <h1 className="font-bold text-lg text-slate-800">
+            {MENU_ITEMS.find(item => item.id === activeTab)?.name || 'Dashboard'}
+          </h1>
+          <div className="w-10" /> {/* Spacer for centering */}
+        </div>
+
+        {/* Content Area */}
         <div className="flex-1 overflow-auto p-4 lg:p-6 relative">
           {loadingData && <div className="absolute top-0 left-0 right-0 h-1 bg-indigo-200 overflow-hidden z-50"><div className="h-full bg-indigo-600 animate-progress"></div></div>}
           {activeTab === 'dashboard' && (
-            <div className="space-y-6">
-              <h1 className="text-3xl font-bold text-slate-800">Dashboard</h1>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="bg-white p-6 rounded-xl shadow border-l-4 border-indigo-500">
+            <div className="space-y-4 md:space-y-6">
+              <h1 className="text-2xl md:text-3xl font-bold text-slate-800">Dashboard</h1>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+                <div className="bg-white p-4 md:p-6 rounded-xl shadow border-l-4 border-indigo-500">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-slate-500 text-sm font-medium">Toplam Teklifler</p>
-                      <h3 className="text-3xl font-bold text-slate-800 mt-2">{data.orders?.filter(o => o.status === 'draft').length || 0}</h3>
+                      <h3 className="text-2xl md:text-3xl font-bold text-slate-800 mt-2">{data.orders?.filter(o => o.status === 'draft').length || 0}</h3>
                     </div>
-                    <Zap className="w-12 h-12 text-indigo-500 opacity-20" />
+                    <Zap className="w-10 h-10 md:w-12 md:h-12 text-indigo-500 opacity-20" />
                   </div>
                 </div>
-                <div className="bg-white p-6 rounded-xl shadow border-l-4 border-green-500">
+                <div className="bg-white p-4 md:p-6 rounded-xl shadow border-l-4 border-green-500">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-slate-500 text-sm font-medium">Toplam Siparişler</p>
-                      <h3 className="text-3xl font-bold text-slate-800 mt-2">{data.orders?.filter(o => o.status !== 'draft').length || 0}</h3>
+                      <h3 className="text-2xl md:text-3xl font-bold text-slate-800 mt-2">{data.orders?.filter(o => o.status !== 'draft').length || 0}</h3>
                     </div>
-                    <ShoppingCart className="w-12 h-12 text-green-500 opacity-20" />
+                    <ShoppingCart className="w-10 h-10 md:w-12 md:h-12 text-green-500 opacity-20" />
                   </div>
                 </div>
-                <div className="bg-white p-6 rounded-xl shadow border-l-4 border-blue-500">
+                <div className="bg-white p-4 md:p-6 rounded-xl shadow border-l-4 border-blue-500">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-slate-500 text-sm font-medium">Toplam Müşteriler</p>
-                      <h3 className="text-3xl font-bold text-slate-800 mt-2">{data.customers?.length || 0}</h3>
+                      <h3 className="text-2xl md:text-3xl font-bold text-slate-800 mt-2">{data.customers?.length || 0}</h3>
                     </div>
-                    <Users className="w-12 h-12 text-blue-500 opacity-20" />
+                    <Users className="w-10 h-10 md:w-12 md:h-12 text-blue-500 opacity-20" />
                   </div>
                 </div>
-                <div className="bg-white p-6 rounded-xl shadow border-l-4 border-orange-500">
+                <div className="bg-white p-4 md:p-6 rounded-xl shadow border-l-4 border-orange-500">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-slate-500 text-sm font-medium">Açık Ticketlar</p>
-                      <h3 className="text-3xl font-bold text-slate-800 mt-2">{data.tickets?.length || 0}</h3>
+                      <h3 className="text-2xl md:text-3xl font-bold text-slate-800 mt-2">{data.tickets?.length || 0}</h3>
                     </div>
-                    <Wrench className="w-12 h-12 text-orange-500 opacity-20" />
+                    <Wrench className="w-10 h-10 md:w-12 md:h-12 text-orange-500 opacity-20" />
                   </div>
                 </div>
               </div>
