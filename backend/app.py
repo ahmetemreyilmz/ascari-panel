@@ -419,7 +419,7 @@ def register_payment():
         
         communication = ' - '.join(ref_parts) if ref_parts else 'Panel Ödeme'
         
-        # Ödeme kaydı oluştur
+        # Ödeme kaydı oluştur - Sadece zorunlu alanlar
         payment_data = {
             'partner_id': partner_id,
             'amount': amount,
@@ -427,17 +427,15 @@ def register_payment():
             'partner_type': 'customer'
         }
         
-        # Communication alanını ekle (bazı Odoo versiyonlarında bu alan olabilir)
-        try:
-            payment_data['communication'] = communication
-        except:
-            pass
-        
         if journal_id:
             payment_data['journal_id'] = journal_id
         
         if date:
             payment_data['date'] = date
+        
+        # Not: Ödeme notunu (nakit/kredi kartı/taksit bilgisi) Odoo'nun
+        # standart account.payment modelinde saklayamıyoruz çünkü uygun alan yok.
+        # Bu bilgileri panel tarafında tutuyoruz.
         
         payment_id = models.execute_kw(db, uid, pwd, 'account.payment', 'create', [payment_data])
         
