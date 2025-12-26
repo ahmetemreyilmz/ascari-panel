@@ -1742,6 +1742,60 @@ export default function AscariDashboard() {
           {activeTab === 'sales' && renderSales()}
           {activeTab === 'helpdesk' && renderHelpdesk()}
           {activeTab === 'customers' && renderCustomers()}
+          {activeTab === 'expenses' && (() => {
+            const categoryTotals = expenseCategories.map(cat => ({
+              category: cat,
+              total: expenses.filter(e => e.category === cat).reduce((sum, e) => sum + parseFloat(e.amount || 0), 0)
+            }));
+            return (
+              <div className="space-y-4 md:space-y-6 animate-fadeIn">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
+                  {categoryTotals.map(ct => (
+                    <div key={ct.category} className="bg-white p-3 md:p-4 rounded-xl shadow border-l-4 border-purple-500">
+                      <p className="text-slate-500 text-xs md:text-sm font-medium">{ct.category}</p>
+                      <h3 className="text-lg md:text-xl font-bold text-slate-800 mt-1">{formatCurrency(ct.total)}</h3>
+                    </div>
+                  ))}
+                </div>
+                <div className="bg-white p-4 md:p-6 rounded-lg shadow">
+                  <h3 className="font-bold text-base md:text-lg mb-4">Yeni Masraf Ekle</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <select className="border-2 p-3 rounded-lg touch-target" value={newExpense.category} onChange={e => setNewExpense({ ...newExpense, category: e.target.value })}>
+                      <option value="">Kategori Seçin</option>
+                      {expenseCategories.map(cat => (<option key={cat} value={cat}>{cat}</option>))}
+                    </select>
+                    <input type="number" className="border-2 p-3 rounded-lg touch-target" placeholder="Tutar (₺)" value={newExpense.amount} onChange={e => setNewExpense({ ...newExpense, amount: e.target.value })} />
+                    <input type="date" className="border-2 p-3 rounded-lg touch-target" value={newExpense.date} onChange={e => setNewExpense({ ...newExpense, date: e.target.value })} />
+                    <textarea className="border-2 p-3 rounded-lg touch-target md:col-span-2 resize-none" rows="2" placeholder="Açıklama..." value={newExpense.description} onChange={e => setNewExpense({ ...newExpense, description: e.target.value })} />
+                    <button onClick={async () => { if (!newExpense.category || !newExpense.amount || !newExpense.date) { alert('Lütfen kategori, tutar ve tarih alanlarını doldurun'); return; } try { setLoadingData(true); const expense = { id: Date.now(), ...newExpense, timestamp: new Date().toISOString() }; setExpenses(prev => [expense, ...prev]); setNewExpense({ category: '', amount: '', date: '', description: '' }); setLoadingData(false); alert('Masraf kaydedildi!'); } catch (error) { setLoadingData(false); alert('Hata: ' + error.message); } }} disabled={!newExpense.category || !newExpense.amount || !newExpense.date} className="md:col-span-2 bg-purple-600 text-white p-3 rounded-lg font-medium touch-target disabled:opacity-50 hover:bg-purple-700">Masraf Kaydet</button>
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg shadow overflow-hidden">
+                  <div className="p-4 border-b bg-slate-50"><h3 className="font-bold text-base md:text-lg">Masraf Geçmişi</h3></div>
+                  {expenses.length > 0 ? (
+                    <div className="p-4 space-y-2 max-h-[600px] overflow-y-auto">
+                      {expenses.map(exp => (
+                        <div key={exp.id} className="border rounded-lg p-3 md:p-4 hover:bg-slate-50">
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <span className="inline-block px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-medium">{exp.category}</span>
+                              <p className="text-sm text-slate-600 mt-1">{exp.description}</p>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-bold text-lg text-purple-700">{formatCurrency(exp.amount)}</div>
+                              <div className="text-xs text-slate-500">{exp.date}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center text-slate-500 py-10">Henüz masraf kaydı yok</div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
           {activeTab === 'accounting' && renderAccounting()}
         </div>
       </div>
