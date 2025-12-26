@@ -52,6 +52,7 @@ const MENU_ITEMS = [
   { id: 'helpdesk', name: 'Teknik Servis', icon: Wrench, roles: ['admin', 'sales'] },
   { id: 'sales', name: 'Satışlar', icon: ShoppingCart, roles: ['admin'] },
   { id: 'customers', name: 'Kontaklar', icon: Users, roles: ['admin'] },
+  { id: 'expenses', name: 'Masraflar', icon: CreditCard, roles: ['admin'] },
   { id: 'accounting', name: 'Muhasebe', icon: DollarSign, roles: ['admin'] },
   { id: 'code', name: 'Entegrasyon', icon: Code, roles: ['admin'] }
 ];
