@@ -766,14 +766,24 @@ export default function AscariDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {filteredTickets.map(t => (
-                  <tr key={t.id} onClick={() => setSelectedTicket(t)} className="hover:bg-slate-50 cursor-pointer">
-                    <td className="p-4 font-medium">{t.customer}</td>
-                    <td className="p-4">{t.product}</td>
-                    <td className="p-4 text-sm text-slate-600">{t.issue}</td>
-                    <td className="p-4"><StatusBadge status={t.status} /></td>
-                  </tr>
-                ))}
+                {filteredTickets.map(t => {
+                  // HTML decode helper
+                  const decodeHTML = (html) => {
+                    if (!html) return '';
+                    const txt = document.createElement('textarea');
+                    txt.innerHTML = html;
+                    return txt.value.replace(/<[^>]*>/g, '').substring(0, 100); // Strip HTML, limit 100 chars
+                  };
+
+                  return (
+                    <tr key={t.id} onClick={() => setSelectedTicket(t)} className="hover:bg-slate-50 cursor-pointer">
+                      <td className="p-4 font-medium">{t.customer}</td>
+                      <td className="p-4">{t.product}</td>
+                      <td className="p-4 text-sm text-slate-600">{decodeHTML(t.issue)}</td>
+                      <td className="p-4"><StatusBadge status={t.status} /></td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
