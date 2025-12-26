@@ -170,6 +170,10 @@ export default function AscariDashboard() {
   const [customerPayments, setCustomerPayments] = useState([]);
   const [newPayment, setNewPayment] = useState({ amount: '', date: '', method: 'cash', note: '', journal_id: '', installments: 1, currency: 'TRY' });
 
+  // Outbound Payments (Bizim yaptığımız ödemeler)
+  const [customerOutboundPayments, setCustomerOutboundPayments] = useState([]);
+  const [newOutboundPayment, setNewOutboundPayment] = useState({ amount: '', date: '', method: 'cash', note: '', journal_id: '', installments: 1, currency: 'TRY' });
+
   // Payment Journals (Kasa, Banka)
   const [cashRegisters, setCashRegisters] = useState([]);
   const [banks, setBanks] = useState([]);
@@ -375,6 +379,79 @@ export default function AscariDashboard() {
       setLoadingData(false);
       alert('Ödeme kaydedilirken hata oluştu: ' + error.message);
       console.error('savePayment hatası:', error);
+    }
+  };
+
+  const saveOutboundPayment = async () => {
+    console.log('saveOutboundPayment başlatıldı', { newOutboundPayment, selectedCustomer });
+
+    if (!newOutboundPayment.amount || !newOutboundPayment.date || !newOutboundPayment.journal_id) {
+      alert('Lütfen tüm alanları doldurun (Tutar, Tarih, Kasa/Banka)');
+      console.error('Eksik alan:', { amount: newOutboundPayment.amount, date: newOutboundPayment.date, journal_id: newOutboundPayment.journal_id });
+      return;
+    }
+
+    try {
+      setLoadingData(true);
+      console.log('API çağrısı yapılıyor... (outbound)');
+
+      const res = await apiCall('register-payment', {
+        partner_id: selectedCustomer.id,
+        amount: parseFloat(newOutboundPayment.amount),
+        date: newOutboundPayment.date,
+        journal_id: parseInt(newOutboundPayment.journal_id),
+        payment_method: newOutboundPayment.method,
+        installments: parseInt(newOutboundPayment.installments) || 1,
+        payment_type: 'outbound',  // Bizim yaptığımız ödeme
+        note: newOutboundPayment.note || ''
+      });
+
+      console.log('API yanıtı (outbound):', res);
+      setLoadingData(false);
+
+      if (res && res.status === 'success') {
+        // Makbuz verisini hazırla
+        const receipt = {
+          receiptNo: 'ODM-' + Date.now().toString().slice(-8),
+          customer: selectedCustomer.name,
+          amount: newOutboundPayment.amount,
+          date: newOutboundPayment.date,
+          method: newOutboundPayment.method,
+          methodLabel: newOutboundPayment.method === 'cash' ? 'Nakit' : newOutboundPayment.method === 'card' ? 'Kredi Kartı' : 'Havale/EFT',
+          installments: newOutboundPayment.installments,
+          journal: newOutboundPayment.method === 'cash'
+            ? cashRegisters.find(c => c.id === newOutboundPayment.journal_id)?.name
+            : banks.find(b => b.id === newOutboundPayment.journal_id)?.name,
+          note: newOutboundPayment.note,
+          timestamp: new Date().toLocaleString('tr-TR'),
+          isOutbound: true  // Ödeme makbuzu olduğunu belirt
+        };
+
+        // Makbuzu göster
+        setPaymentReceipt(receipt);
+
+        // Add to local state
+        const payment = {
+          id: res.payment_id,
+          amount: newOutboundPayment.amount,
+          date: newOutboundPayment.date,
+          method: newOutboundPayment.method,
+          note: newOutboundPayment.note,
+          installments: newOutboundPayment.installments,
+          timestamp: new Date().toISOString()
+        };
+        setCustomerOutboundPayments(prev => [payment, ...prev]);
+        setNewOutboundPayment({ amount: '', date: '', method: 'cash', note: '', journal_id: cashRegisters[0]?.id || '', installments: 1, currency: 'TRY' });
+
+        console.log('Ödeme başarıyla kaydedildi, makbuz gösteriliyor');
+      } else {
+        alert('Ödeme kaydedilemedi: ' + (res?.message || 'Bilinmeyen hata'));
+        console.error('API hatası:', res);
+      }
+    } catch (error) {
+      setLoadingData(false);
+      alert('Ödeme kaydedilirken hata oluştu: ' + error.message);
+      console.error('saveOutboundPayment hatası:', error);
     }
   };
 
@@ -916,6 +993,7 @@ export default function AscariDashboard() {
                 <button onClick={() => setCustomerDetailTab('quotes')} className={`flex-1 min-w-[100px] py-3 px-2 text-sm md:text-base whitespace-nowrap ${customerDetailTab === 'quotes' ? 'border-b-2 border-indigo-600 font-bold text-indigo-600' : 'text-slate-600'}`}>Teklifler</button>
                 <button onClick={() => setCustomerDetailTab('tickets')} className={`flex-1 min-w-[100px] py-3 px-2 text-sm md:text-base whitespace-nowrap ${customerDetailTab === 'tickets' ? 'border-b-2 border-indigo-600 font-bold text-indigo-600' : 'text-slate-600'}`}>Teknik Servis</button>
                 <button onClick={() => setCustomerDetailTab('payments')} className={`flex-1 min-w-[100px] py-3 px-2 text-sm md:text-base whitespace-nowrap ${customerDetailTab === 'payments' ? 'border-b-2 border-green-600 font-bold text-green-600' : 'text-slate-600'}`}>Tahsilatlar</button>
+                <button onClick={() => setCustomerDetailTab('outbound')} className={`flex-1 min-w-[100px] py-3 px-2 text-sm md:text-base whitespace-nowrap ${customerDetailTab === 'outbound' ? 'border-b-2 border-red-600 font-bold text-red-600' : 'text-slate-600'}`}>Ödemeler</button>
               </div>
 
               {/* Tab Content */}
@@ -1147,6 +1225,156 @@ export default function AscariDashboard() {
                         </div>
                       ) : (
                         <div className="text-center text-slate-500 py-10">Tahsilat kaydı bulunamadı</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Ödemeler (Outbound) Tab */}
+                {customerDetailTab === 'outbound' && (
+                  <div className="space-y-4">
+                    {/* Outbound Payment Form */}
+                    <div className="border-2 border-red-200 rounded-lg p-4 bg-red-50">
+                      <h3 className="font-bold mb-4 text-sm md:text-base">Yeni Ödeme Kaydet</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <input
+                          type="number"
+                          className="border-2 p-3 rounded-lg touch-target"
+                          placeholder="Tutar (₺)"
+                          value={newOutboundPayment.amount}
+                          onChange={e => setNewOutboundPayment({ ...newOutboundPayment, amount: e.target.value })}
+                        />
+                        <input
+                          type="date"
+                          className="border-2 p-3 rounded-lg touch-target"
+                          value={newOutboundPayment.date}
+                          onChange={e => setNewOutboundPayment({ ...newOutboundPayment, date: e.target.value })}
+                        />
+                        <select
+                          className="border-2 p-3 rounded-lg touch-target"
+                          value={newOutboundPayment.method}
+                          onChange={e => {
+                            const method = e.target.value;
+                            let journal_id = '';
+                            if (method === 'cash' && cashRegisters.length > 0) {
+                              journal_id = cashRegisters[0].id;
+                            } else if ((method === 'card' || method === 'transfer') && banks.length > 0) {
+                              journal_id = banks[0].id;
+                            }
+                            setNewOutboundPayment({ ...newOutboundPayment, method, journal_id, installments: 1 });
+                          }}
+                        >
+                          <option value="cash">Nakit</option>
+                          <option value="card">Kredi Kartı</option>
+                          <option value="transfer">Havale/EFT</option>
+                        </select>
+
+                        {/* Conditional: Nakit - Kasa Seçimi */}
+                        {newOutboundPayment.method === 'cash' && (
+                          <select
+                            className="border-2 p-3 rounded-lg touch-target bg-yellow-50"
+                            value={newOutboundPayment.journal_id}
+                            onChange={e => setNewOutboundPayment({ ...newOutboundPayment, journal_id: e.target.value })}
+                          >
+                            <option value="">Kasa Seçin</option>
+                            {cashRegisters.map(r => (
+                              <option key={r.id} value={r.id}>{r.name} ({r.code})</option>
+                            ))}
+                          </select>
+                        )}
+
+                        {/* Conditional: Kredi Kartı - Banka + Taksit */}
+                        {newOutboundPayment.method === 'card' && (
+                          <>
+                            <select
+                              className="border-2 p-3 rounded-lg touch-target bg-blue-50"
+                              value={newOutboundPayment.journal_id}
+                              onChange={e => setNewOutboundPayment({ ...newOutboundPayment, journal_id: e.target.value })}
+                            >
+                              <option value="">Banka Seçin</option>
+                              {banks.map(b => (
+                                <option key={b.id} value={b.id}>{b.name}</option>
+                              ))}
+                            </select>
+                            <select
+                              className="border-2 p-3 rounded-lg touch-target bg-blue-50"
+                              value={newOutboundPayment.installments}
+                              onChange={e => setNewOutboundPayment({ ...newOutboundPayment, installments: e.target.value })}
+                            >
+                              <option value={1}>Tek Çekim</option>
+                              {[2, 3, 4, 5, 6, 7, 8, 9].map(i => (
+                                <option key={i} value={i}>{i} Taksit</option>
+                              ))}
+                            </select>
+                          </>
+                        )}
+
+                        {/* Conditional: Havale/EFT - Banka Hesabı */}
+                        {newOutboundPayment.method === 'transfer' && (
+                          <select
+                            className="border-2 p-3 rounded-lg touch-target bg-green-50"
+                            value={newOutboundPayment.journal_id}
+                            onChange={e => setNewOutboundPayment({ ...newOutboundPayment, journal_id: e.target.value })}
+                          >
+                            <option value="">Banka Hesabı Seçin</option>
+                            {banks.map(b => (
+                              <option key={b.id} value={b.id}>{b.name}</option>
+                            ))}
+                          </select>
+                        )}
+
+                        {/* Döviz Seçimi */}
+                        <select
+                          className="border-2 p-3 rounded-lg touch-target bg-slate-50"
+                          value={newOutboundPayment.currency}
+                          onChange={e => setNewOutboundPayment({ ...newOutboundPayment, currency: e.target.value })}
+                        >
+                          <option value="TRY">₺ Türk Lirası</option>
+                          <option value="USD">$ Amerikan Doları</option>
+                          <option value="EUR">€ Euro</option>
+                          <option value="GBP">£ İngiliz Sterlini</option>
+                        </select>
+
+                        <input
+                          type="text"
+                          className="border-2 p-3 rounded-lg touch-target md:col-span-2"
+                          placeholder="Not (Opsiyonel)"
+                          value={newOutboundPayment.note}
+                          onChange={e => setNewOutboundPayment({ ...newOutboundPayment, note: e.target.value })}
+                        />
+                      </div>
+                      <button
+                        onClick={saveOutboundPayment}
+                        disabled={!newOutboundPayment.amount || !newOutboundPayment.date || !newOutboundPayment.journal_id}
+                        className="w-full mt-3 bg-red-600 text-white p-3 rounded-lg font-medium touch-target disabled:opacity-50 hover:bg-red-700"
+                      >
+                        Ödeme Kaydet
+                      </button>
+                      {(!cashRegisters.length && !banks.length) && (
+                        <div className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded">
+                          ⚠️ Odoo'da kasa veya banka journal'ı bulunamadı. Lütfen Odoo'da journal oluşturun.
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Outbound Payment History */}
+                    <div>
+                      <h3 className="font-bold mb-3 text-sm md:text-base">Ödeme Geçmişi</h3>
+                      {customerOutboundPayments.length > 0 ? (
+                        <div className="space-y-2">
+                          {customerOutboundPayments.map(p => (
+                            <div key={p.id} className="border rounded-lg p-3 md:p-4 bg-red-50">
+                              <div className="flex justify-between items-start mb-1">
+                                <div className="font-bold text-red-700 text-sm md:text-base">{formatCurrency(p.amount)}</div>
+                                <div className="text-xs text-slate-500">{p.date}</div>
+                              </div>
+                              <div className="text-xs md:text-sm text-slate-600">Ödeme Yöntemi: {p.method === 'cash' ? 'Nakit' : p.method === 'card' ? 'Kredi Kartı' : 'Havale/EFT'}</div>
+                              {p.note && <div className="text-xs text-slate-500 mt-1">{p.note}</div>}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center text-slate-500 py-10">Ödeme kaydı bulunamadı</div>
                       )}
                     </div>
                   </div>
