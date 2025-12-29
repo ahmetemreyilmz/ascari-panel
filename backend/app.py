@@ -71,16 +71,39 @@ def data():
         
         categories = build_tree(cats)
 
-        # 2. Ürünler (Limit 1000) - Kurulu ölçüler dahil
+        # 2. Ürünler (Limit 1000) - Kurulu ölçüler + KDV bilgisi dahil
         prods = models.execute_kw(db, uid, pwd, 'product.product', 'search_read', [[['sale_ok','=',True]]], 
             {'fields': ['id', 'display_name', 'default_code', 'list_price', 'categ_id', 'image_128', 
-                        'x_assembled_width', 'x_assembled_depth', 'x_assembled_height', 'qty_available'], 'limit': 1000})
-        products = [{'id': p['id'], 'name': p['display_name'], 'default_code': p['default_code'] or '', 
-                    'list_price': p['list_price'], 'image_128': p['image_128'], 'categ_path': str(p['categ_id']),
-                    'x_assembled_width': p.get('x_assembled_width', ''), 
-                    'x_assembled_depth': p.get('x_assembled_depth', ''),
-                    'x_assembled_height': p.get('x_assembled_height', ''),
-                    'qty_available': p.get('qty_available', 0)} for p in prods]
+                        'x_assembled_width', 'x_assembled_depth', 'x_assembled_height', 'qty_available', 'taxes_id'], 'limit': 1000})
+        
+        # KDV oranını hesapla
+        products = []
+        for p in prods:
+            tax_rate = 0
+            if p.get('taxes_id'):
+                try:
+                    tax_ids = p['taxes_id']
+                    if tax_ids:
+                        # İlk vergiyi al
+                        tax_data = models.execute_kw(db, uid, pwd, 'account.tax', 'read', [tax_ids[:1]], {'fields': ['amount']})
+                        if tax_data:
+                            tax_rate = tax_data[0].get('amount', 0)
+                except:
+                    tax_rate = 0
+            
+            products.append({
+                'id': p['id'], 
+                'name': p['display_name'], 
+                'default_code': p['default_code'] or '', 
+                'list_price': p['list_price'], 
+                'image_128': p['image_128'], 
+                'categ_path': str(p['categ_id']),
+                'x_assembled_width': p.get('x_assembled_width', ''), 
+                'x_assembled_depth': p.get('x_assembled_depth', ''),
+                'x_assembled_height': p.get('x_assembled_height', ''),
+                'qty_available': p.get('qty_available', 0),
+                'tax_rate': tax_rate  # KDV oranı (örn: 20, 10, 8)
+            })
 
         # 3. Siparişler (Limit 100) - Teklifler (draft) dahil
         orders = models.execute_kw(db, uid, pwd, 'sale.order', 'search_read', [], 
@@ -128,7 +151,7 @@ def search():
         fields = []
         if model == 'product.product':
              domain = ['|', ('name', 'ilike', query), ('default_code', 'ilike', query)]
-             fields = ['id', 'display_name', 'default_code', 'list_price', 'categ_id', 'image_128']
+             fields = ['id', 'display_name', 'default_code', 'list_price', 'categ_id', 'image_128', 'taxes_id']
         elif model == 'sale.order':
              domain = ['|', ('name', 'ilike', query), ('partner_id', 'ilike', query)]
              fields = ['id', 'name', 'partner_id', 'date_order', 'amount_total', 'state']
@@ -141,7 +164,16 @@ def search():
         # Format
         data = []
         if model == 'product.product':
-            data = [{'id': p['id'], 'name': p['display_name'], 'default_code': p['default_code'], 'list_price': p['list_price'], 'image_128': p['image_128'], 'categ_path': str(p['categ_id'])} for p in res]
+            for p in res:
+                tax_rate = 0
+                if p.get('taxes_id'):
+                    try:
+                        tax_data = models.execute_kw(d.get('db'), uid, d.get('password'), 'account.tax', 'read', [p['taxes_id'][:1]], {'fields': ['amount']})
+                        if tax_data:
+                            tax_rate = tax_data[0].get('amount', 0)
+                    except:
+                        tax_rate = 0
+                data.append({'id': p['id'], 'name': p['display_name'], 'default_code': p['default_code'], 'list_price': p['list_price'], 'image_128': p['image_128'], 'categ_path': str(p['categ_id']), 'tax_rate': tax_rate})
         elif model == 'sale.order':
             data = [{'id_raw': o['id'], 'name': o['name'], 'customer': o['partner_id'][1], 'date': o['date_order'], 'amount': o['amount_total'], 'status': o['state']} for o in res]
         elif model == 'res.partner':

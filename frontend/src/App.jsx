@@ -27,9 +27,11 @@ const VAT_RATE = 0.20; // %20 KDV
 
 const formatCurrency = (value) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(value || 0);
 
-// KDV dahil fiyat gösterimi
-const formatCurrencyWithVAT = (value, showLabel = false) => {
-  const withVAT = (value || 0) * (1 + VAT_RATE);
+// KDV dahil fiyat gösterimi - Ürüne özgü KDV oranı kullanılır
+const formatCurrencyWithVAT = (price, product, showLabel = false) => {
+  // Ürün objesi ise tax_rate'i al, yoksa varsayılan %20
+  const taxRate = (product && product.tax_rate) ? (product.tax_rate / 100) : 0.20;
+  const withVAT = (price || 0) * (1 + taxRate);
   const formatted = formatCurrency(withVAT);
   return showLabel ? `${formatted} (KDV Dahil)` : formatted;
 };
@@ -119,7 +121,7 @@ const ProductCard = ({ product, onAdd, onInfo }) => {
           )}
         </div>
         <div className="flex justify-between items-end mt-2">
-          <span className="text-indigo-600 font-bold text-lg">{formatCurrencyWithVAT(product.list_price, true)}</span>
+          <span className="text-indigo-600 font-bold text-lg">{formatCurrencyWithVAT(product.list_price, product, true)}</span>
           <div className="bg-indigo-50 text-indigo-600 p-3 rounded-full"><Plus className="w-5 h-5" /></div>
         </div>
       </div>
@@ -578,7 +580,7 @@ export default function AscariDashboard() {
             <div className="overflow-x-auto">
               <table className="w-full mb-8 text-sm">
                 <thead><tr className="border-b-2 border-gray-200 text-left"><th className="py-2">Ürün</th><th className="text-right">Miktar</th><th className="text-right hidden sm:table-cell">Birim Fiyat</th><th className="text-right">Tutar</th></tr></thead>
-                <tbody>{quickOfferDetails.items.map((i, k) => <tr key={k} className="border-b"><td className="py-3"><div className="font-bold">{i.name}</div><div className="text-xs text-gray-500">{i.default_code}</div></td><td className="text-right">{i.qty}</td><td className="text-right hidden sm:table-cell">{formatCurrency(i.list_price)}</td><td className="text-right font-bold">{formatCurrency(i.list_price * i.qty)}</td></tr>)}</tbody>
+                <tbody>{quickOfferDetails.items.map((i, k) => <tr key={k} className="border-b"><td className="py-3"><div className="font-bold">{i.name}</div><div className="text-xs text-gray-500">{i.default_code}</div></td><td className="text-right">{i.qty}</td><td className="text-right hidden sm:table-cell">{formatCurrencyWithVAT(i.list_price, i)}</td><td className="text-right font-bold">{formatCurrency(i.list_price * i.qty)}</td></tr>)}</tbody>
               </table>
             </div>
             <div className="flex justify-end"><div className="w-full md:w-1/2 text-right space-y-2"><div className="flex justify-between border-t pt-2 text-base"><span>Kredi Kartı 6 Taksit:</span><span className="font-bold">{formatCurrency(quickOfferDetails.grandTotal)}</span></div>{quickOfferDetails.hasDiscount && <div className="flex justify-between border-t pt-2 text-lg md:text-xl font-bold text-green-700"><span>Nakit/Tek Çekim:</span><span>{formatCurrency(quickOfferDetails.discountedTotal)}</span></div>}</div></div>
@@ -628,7 +630,7 @@ export default function AscariDashboard() {
         {isOfferMode && (
           <div className="lg:w-1/4 bg-white rounded-xl shadow-lg border border-slate-200 flex flex-col">
             <div className="p-4 bg-slate-900 text-white font-bold rounded-t-xl flex justify-between"><span>Sepet</span><span className="bg-indigo-500 px-2 rounded text-xs py-1">{quickCart.length}</span></div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">{quickCart.map(i => <div key={i.id} className="flex justify-between items-center border-b pb-3 gap-2"><div className="flex-1 pr-2"><div className="text-sm font-medium truncate">{i.name}</div><div className="text-xs text-slate-400">{formatCurrency(i.list_price)}</div></div><div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1 touch-manipulation"><button onClick={() => setQuickCart(prev => prev.map(x => x.id === i.id ? { ...x, qty: Math.max(1, x.qty - 1) } : x))} className="px-3 py-2 hover:bg-slate-200 rounded active:scale-95 transition-transform text-lg font-bold touch-target">-</button><span className="text-base font-bold min-w-[2rem] text-center">{i.qty}</span><button onClick={() => addToCart(i)} className="px-3 py-2 hover:bg-slate-200 rounded active:scale-95 transition-transform text-lg font-bold touch-target">+</button></div><button onClick={() => setQuickCart(prev => prev.filter(x => x.id !== i.id))} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded touch-manipulation active:scale-95 transition-transform touch-target"><Trash2 className="w-5 h-5" /></button></div>)}</div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">{quickCart.map(i => <div key={i.id} className="flex justify-between items-center border-b pb-3 gap-2"><div className="flex-1 pr-2"><div className="text-sm font-medium truncate">{i.name}</div><div className="text-xs text-slate-400">{formatCurrencyWithVAT(i.list_price, i)}</div></div><div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1 touch-manipulation"><button onClick={() => setQuickCart(prev => prev.map(x => x.id === i.id ? { ...x, qty: Math.max(1, x.qty - 1) } : x))} className="px-3 py-2 hover:bg-slate-200 rounded active:scale-95 transition-transform text-lg font-bold touch-target">-</button><span className="text-base font-bold min-w-[2rem] text-center">{i.qty}</span><button onClick={() => addToCart(i)} className="px-3 py-2 hover:bg-slate-200 rounded active:scale-95 transition-transform text-lg font-bold touch-target">+</button></div><button onClick={() => setQuickCart(prev => prev.filter(x => x.id !== i.id))} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded touch-manipulation active:scale-95 transition-transform touch-target"><Trash2 className="w-5 h-5" /></button></div>)}</div>
             <div className="p-4 border-t bg-slate-50 rounded-b-xl space-y-3">
               <div className="flex items-center justify-between mb-2 p-2 bg-white rounded border">
                 <span className="text-sm font-medium">Nakit/Tek Çekim İndirimi</span>
