@@ -76,20 +76,29 @@ def data():
             {'fields': ['id', 'display_name', 'default_code', 'list_price', 'categ_id', 'image_128', 
                         'x_assembled_width', 'x_assembled_depth', 'x_assembled_height', 'qty_available', 'taxes_id'], 'limit': 1000})
         
-        # KDV oranını hesapla
+        # Tüm unique tax ID'leri topla (PERFORMANS İÇİN BATCH)
+        all_tax_ids = set()
+        for p in prods:
+            if p.get('taxes_id'):
+                all_tax_ids.update(p['taxes_id'])
+        
+        # Tek seferde tüm vergileri çek (HIZLI!)
+        tax_rates = {}
+        if all_tax_ids:
+            try:
+                taxes = models.execute_kw(db, uid, pwd, 'account.tax', 'read', [list(all_tax_ids)], {'fields': ['id', 'amount']})
+                tax_rates = {t['id']: t['amount'] for t in taxes}
+            except:
+                pass
+        
+        # Ürünlere KDV oranını ata
         products = []
         for p in prods:
             tax_rate = 0
-            if p.get('taxes_id'):
-                try:
-                    tax_ids = p['taxes_id']
-                    if tax_ids:
-                        # İlk vergiyi al
-                        tax_data = models.execute_kw(db, uid, pwd, 'account.tax', 'read', [tax_ids[:1]], {'fields': ['amount']})
-                        if tax_data:
-                            tax_rate = tax_data[0].get('amount', 0)
-                except:
-                    tax_rate = 0
+            if p.get('taxes_id') and p['taxes_id']:
+                # İlk verginin oranını al
+                first_tax_id = p['taxes_id'][0]
+                tax_rate = tax_rates.get(first_tax_id, 0)
             
             products.append({
                 'id': p['id'], 
@@ -164,15 +173,24 @@ def search():
         # Format
         data = []
         if model == 'product.product':
+            # Batch tax query (PERFORMANCE)
+            all_tax_ids = set()
+            for p in res:
+                if p.get('taxes_id'):
+                    all_tax_ids.update(p['taxes_id'])
+            
+            tax_rates = {}
+            if all_tax_ids:
+                try:
+                    taxes = models.execute_kw(d.get('db'), uid, d.get('password'), 'account.tax', 'read', [list(all_tax_ids)], {'fields': ['id', 'amount']})
+                    tax_rates = {t['id']: t['amount'] for t in taxes}
+                except:
+                    pass
+            
             for p in res:
                 tax_rate = 0
-                if p.get('taxes_id'):
-                    try:
-                        tax_data = models.execute_kw(d.get('db'), uid, d.get('password'), 'account.tax', 'read', [p['taxes_id'][:1]], {'fields': ['amount']})
-                        if tax_data:
-                            tax_rate = tax_data[0].get('amount', 0)
-                    except:
-                        tax_rate = 0
+                if p.get('taxes_id') and p['taxes_id']:
+                    tax_rate = tax_rates.get(p['taxes_id'][0], 0)
                 data.append({'id': p['id'], 'name': p['display_name'], 'default_code': p['default_code'], 'list_price': p['list_price'], 'image_128': p['image_128'], 'categ_path': str(p['categ_id']), 'tax_rate': tax_rate})
         elif model == 'sale.order':
             data = [{'id_raw': o['id'], 'name': o['name'], 'customer': o['partner_id'][1], 'date': o['date_order'], 'amount': o['amount_total'], 'status': o['state']} for o in res]
