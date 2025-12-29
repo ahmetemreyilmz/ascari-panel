@@ -82,13 +82,18 @@ def data():
             if p.get('taxes_id'):
                 all_tax_ids.update(p['taxes_id'])
         
+        print(f"DEBUG: Found {len(all_tax_ids)} unique tax IDs")  # DEBUG
+        
         # Tek seferde tüm vergileri çek (HIZLI!)
         tax_rates = {}
         if all_tax_ids:
             try:
                 taxes = models.execute_kw(db, uid, pwd, 'account.tax', 'read', [list(all_tax_ids)], {'fields': ['id', 'amount']})
+                print(f"DEBUG: Retrieved {len(taxes)} taxes from Odoo")  # DEBUG
+                print(f"DEBUG: First tax example: {taxes[0] if taxes else 'NONE'}")  # DEBUG
                 tax_rates = {t['id']: t['amount'] for t in taxes}
-            except:
+            except Exception as e:
+                print(f"ERROR: Failed to fetch taxes: {e}")  # DEBUG
                 pass
         
         # Ürünlere KDV oranını ata
@@ -99,6 +104,10 @@ def data():
                 # İlk verginin oranını al
                 first_tax_id = p['taxes_id'][0]
                 tax_rate = tax_rates.get(first_tax_id, 0)
+                
+                # İlk ürün için debug
+                if len(products) == 0:
+                    print(f"DEBUG: First product '{p['display_name']}' has tax_ids={p['taxes_id']}, tax_rate={tax_rate}")  # DEBUG
             
             products.append({
                 'id': p['id'], 

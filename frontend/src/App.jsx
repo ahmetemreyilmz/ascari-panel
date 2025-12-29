@@ -31,6 +31,16 @@ const formatCurrency = (value) => new Intl.NumberFormat('tr-TR', { style: 'curre
 const formatCurrencyWithVAT = (price, product, showLabel = false) => {
   // Ürün objesi ise tax_rate'i al, yoksa varsayılan %20
   const taxRate = (product && product.tax_rate) ? (product.tax_rate / 100) : 0.20;
+
+  // DEBUG: İlk kez çağrıldığında log yaz
+  if (window.taxDebugCount === undefined) {
+    window.taxDebugCount = 0;
+  }
+  if (window.taxDebugCount < 3 && product) {
+    console.log(`DEBUG: formatCurrencyWithVAT - Product: ${product.name}, tax_rate from backend: ${product.tax_rate}, using: ${taxRate * 100}%`);
+    window.taxDebugCount++;
+  }
+
   const withVAT = (price || 0) * (1 + taxRate);
   const formatted = formatCurrency(withVAT);
   return showLabel ? `${formatted} (KDV Dahil)` : formatted;
