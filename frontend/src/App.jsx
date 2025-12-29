@@ -23,7 +23,16 @@ const INITIAL_DATA = {
   categories: []
 };
 
+const VAT_RATE = 0.20; // %20 KDV
+
 const formatCurrency = (value) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(value || 0);
+
+// KDV dahil fiyat gösterimi
+const formatCurrencyWithVAT = (value, showLabel = false) => {
+  const withVAT = (value || 0) * (1 + VAT_RATE);
+  const formatted = formatCurrency(withVAT);
+  return showLabel ? `${formatted} (KDV Dahil)` : formatted;
+};
 
 const StatusBadge = ({ status, label, onClick }) => {
   const map = {
@@ -110,7 +119,7 @@ const ProductCard = ({ product, onAdd, onInfo }) => {
           )}
         </div>
         <div className="flex justify-between items-end mt-2">
-          <span className="text-indigo-600 font-bold text-lg">{formatCurrency(product.list_price)}</span>
+          <span className="text-indigo-600 font-bold text-lg">{formatCurrencyWithVAT(product.list_price, true)}</span>
           <div className="bg-indigo-50 text-indigo-600 p-3 rounded-full"><Plus className="w-5 h-5" /></div>
         </div>
       </div>
@@ -162,6 +171,14 @@ export default function AscariDashboard() {
   const [tempCustomerPhone, setTempCustomerPhone] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [applyDiscount, setApplyDiscount] = useState(true); // Nakit/Tek çekim indirimi
+
+  // Hızlı Teklif - Optimizasyon
+  const [initialProductsLoaded, setInitialProductsLoaded] = useState(false);
+  const [isMobileCategoryOpen, setIsMobileCategoryOpen] = useState(false);
+
+  // Hızlı Teklif - Manuel İndirim
+  const [manualDiscount, setManualDiscount] = useState({ type: 'none', value: 0 });
+  const [showPriceEditor, setShowPriceEditor] = useState(false);
 
   // CRM Data
   const [customerOrders, setCustomerOrders] = useState([]);
@@ -240,7 +257,10 @@ export default function AscariDashboard() {
     setLoadingData(true);
     const res = await apiCall('search', { model, query });
     if (res && res.status === 'success') {
-      if (model === 'product.product') setData(prev => ({ ...prev, products: res.data }));
+      if (model === 'product.product') {
+        setData(prev => ({ ...prev, products: res.data }));
+        setInitialProductsLoaded(true);
+      }
       if (model === 'res.partner') setData(prev => ({ ...prev, customers: res.data }));
       if (model === 'sale.order') setData(prev => ({ ...prev, orders: res.data }));
     }
@@ -533,10 +553,14 @@ export default function AscariDashboard() {
 
   // 1. HIZLI TEKLİF & ÜRÜN LİSTESİ - Responsive
   const renderProductGrid = (isOfferMode) => {
-    const filtered = data.products.filter(p => {
-      const catMatch = !selectedCategoryId || (p.categ_path && p.categ_path.includes(String(selectedCategoryId)));
-      return catMatch;
-    });
+    // İlk yüklemede ürün gösterme - sadece arama veya kategori seçince göster
+    let filtered = [];
+    if (initialProductsLoaded || selectedCategoryId || productSearch) {
+      filtered = data.products.filter(p => {
+        const catMatch = !selectedCategoryId || (p.categ_path && p.categ_path.includes(String(selectedCategoryId)));
+        return catMatch;
+      });
+    }
 
     if (quickOfferDetails) {
       return (
@@ -569,18 +593,34 @@ export default function AscariDashboard() {
         {/* Categories - Hide on mobile, show as drawer or toggle */}
         <div className="hidden lg:block lg:w-1/4 bg-white rounded-xl shadow-sm border border-slate-200 flex-col">
           <div className="p-4 border-b font-bold text-slate-700 bg-slate-50 rounded-t-xl">Kategoriler</div>
-          <div className="p-2 flex-1 overflow-y-auto"><CategoryTree categories={data.categories} selectedId={selectedCategoryId} onSelect={setSelectedCategoryId} /></div>
+          <div className="p-2 flex-1 overflow-y-auto"><CategoryTree categories={data.categories} selectedId={selectedCategoryId} onSelect={(id) => { setSelectedCategoryId(id); setInitialProductsLoaded(true); }} /></div>
         </div>
 
         {/* Products */}
         <div className={`flex-1 flex flex-col gap-4`}>
           <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row gap-2">
+            <button onClick={() => setIsMobileCategoryOpen(true)} className="lg:hidden bg-indigo-50 text-indigo-600 px-4 py-2 rounded-lg font-medium flex items-center justify-center gap-2">
+              <Layers className="w-4 h-4" />
+              Kategoriler
+            </button>
             <div className="relative flex-1"><Search className="absolute left-3 top-3 text-slate-400 w-5 h-5" /><input className="w-full pl-10 border-2 p-3 rounded-lg touch-target" placeholder="Sunucuda Ara..." value={productSearch} onChange={e => setProductSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && performSearch('product.product', productSearch)} /></div>
             <button onClick={() => performSearch('product.product', productSearch)} className="bg-indigo-600 text-white px-6 py-3 rounded-lg touch-target">Ara</button>
           </div>
           <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 p-4 overflow-y-auto">
             <div className="grid grid-cols-1 gap-4">{filtered.map(p => <ProductCard key={p.id} product={p} onAdd={addToCart} onInfo={setSelectedProduct} />)}</div>
-            {filtered.length === 0 && <div className="text-center py-20 text-slate-400">Ürün yok.</div>}
+            {filtered.length === 0 && (
+              <div className="text-center py-20 text-slate-400">
+                {!initialProductsLoaded && !selectedCategoryId && !productSearch ? (
+                  <div>
+                    <Search className="w-16 h-16 mx-auto mb-4 opacity-20" />
+                    <p className="text-lg font-medium">Ürün aramak için yukarıdaki arama çubuğunu kullanın</p>
+                    <p className="text-sm mt-2">veya kategorilerden birini seçin</p>
+                  </div>
+                ) : (
+                  <p>Ürün bulunamadı.</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -608,6 +648,31 @@ export default function AscariDashboard() {
               <input className="w-full border-2 p-3 rounded-lg text-base touch-target" placeholder="Müşteri Adı (Opsiyonel)" value={tempCustomerName} onChange={e => setTempCustomerName(e.target.value)} />
               <input className="w-full border-2 p-3 rounded-lg text-base touch-target" placeholder="Telefon (Opsiyonel)" value={tempCustomerPhone} onChange={e => setTempCustomerPhone(e.target.value)} />
               <button onClick={createQuickOffer} disabled={quickCart.length === 0} className="w-full bg-indigo-600 text-white py-4 rounded-lg font-bold text-lg disabled:opacity-50 hover:bg-indigo-700 active:scale-98 transition-transform touch-target">Teklif Oluştur</button>
+            </div>
+          </div>
+        )}
+
+        {/* Mobile Category Drawer */}
+        {isMobileCategoryOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 lg:hidden" onClick={() => setIsMobileCategoryOpen(false)}>
+            <div className="absolute left-0 top-0 bottom-0 w-80 bg-white shadow-xl" onClick={e => e.stopPropagation()}>
+              <div className="p-4 border-b flex justify-between items-center bg-slate-50">
+                <h3 className="font-bold text-lg">Kategoriler</h3>
+                <button onClick={() => setIsMobileCategoryOpen(false)} className="p-2 hover:bg-slate-200 rounded">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-2 overflow-y-auto h-[calc(100vh-80px)]">
+                <CategoryTree
+                  categories={data.categories}
+                  selectedId={selectedCategoryId}
+                  onSelect={(id) => {
+                    setSelectedCategoryId(id);
+                    setInitialProductsLoaded(true);
+                    setIsMobileCategoryOpen(false);
+                  }}
+                />
+              </div>
             </div>
           </div>
         )}
